@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { ArrowRight, Eye, EyeOff, GraduationCap, LockKeyhole, ShieldCheck, UserRound } from "lucide-react";
 import { Brand } from "./brand";
-import { DEMO_TEACHER, EXAM } from "@/lib/demo-data";
-import { validateStudent } from "@/lib/store";
+import { DEMO_TEACHER } from "@/lib/demo-data";
+import { findStudent } from "@/lib/store";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { signInTeacher, signUpTeacher } from "@/lib/teacher-auth";
 import type { StudentCredential, TeacherIdentity } from "@/lib/types";
@@ -22,7 +22,7 @@ export function LoginView({ onTeacherLogin, onStudentLogin }: LoginViewProps) {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const cloudReady = isSupabaseConfigured();
-  const [studentForm, setStudentForm] = useState({ examCode: EXAM.code, studentId: "SV001", password: "246810" });
+  const [studentId, setStudentId] = useState("SV001");
   const [teacherForm, setTeacherForm] = useState({ name: "", email: DEMO_TEACHER.email, password: DEMO_TEACHER.password });
 
   const changeRole = (nextRole: "student" | "teacher") => {
@@ -49,7 +49,7 @@ export function LoginView({ onTeacherLogin, onStudentLogin }: LoginViewProps) {
         onTeacherLogin(await signInTeacher(teacherForm.email, teacherForm.password));
         return;
       }
-      const student = validateStudent(studentForm.examCode, studentForm.studentId, studentForm.password);
+      const student = findStudent(studentId);
       if (student) onStudentLogin(student);
       else setError("Không tìm thấy mã dự thi phù hợp. Vui lòng kiểm tra lại.");
     } catch (cause) {
@@ -96,9 +96,8 @@ export function LoginView({ onTeacherLogin, onStudentLogin }: LoginViewProps) {
 
             <form className="mt-6 space-y-4" onSubmit={(event) => void submit(event)}>
               {role === "student" ? <>
-                <Field label="Mã kỳ thi"><input value={studentForm.examCode} onChange={(e) => setStudentForm({ ...studentForm, examCode: e.target.value })} placeholder="Ví dụ: ATTT-2026" /></Field>
-                <Field label="Mã sinh viên"><input value={studentForm.studentId} onChange={(e) => setStudentForm({ ...studentForm, studentId: e.target.value })} placeholder="Nhập mã sinh viên" /></Field>
-                <Field label="Mật khẩu dự thi"><PasswordInput value={studentForm.password} show={showPassword} onShow={() => setShowPassword(!showPassword)} onChange={(password) => setStudentForm({ ...studentForm, password })} /></Field>
+                <Field label="Mã sinh viên"><input value={studentId} onChange={(e) => setStudentId(e.target.value)} placeholder="Nhập mã sinh viên" /></Field>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-600">Sau khi tiếp tục, bạn sẽ thấy danh sách file đề đang mở và đã khóa. Mật khẩu được nhập khi chọn một đề đang mở.</div>
               </> : <>
                 {teacherMode === "signup" && <Field label="Họ tên giảng viên"><input value={teacherForm.name} onChange={(e) => setTeacherForm({ ...teacherForm, name: e.target.value })} placeholder="Nguyễn Minh Anh" /></Field>}
                 <Field label="Email giảng viên"><input type="email" required value={teacherForm.email} onChange={(e) => setTeacherForm({ ...teacherForm, email: e.target.value })} /></Field>
@@ -107,7 +106,7 @@ export function LoginView({ onTeacherLogin, onStudentLogin }: LoginViewProps) {
 
               {error && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{error}</div>}
               {notice && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">{notice}</div>}
-              <button disabled={busy} className="primary-button w-full" type="submit">{busy ? "Đang xử lý..." : role === "student" ? "Kiểm tra thiết bị" : teacherMode === "signup" ? "Tạo tài khoản" : "Mở bảng điều khiển"}<ArrowRight className="h-4 w-4" /></button>
+              <button disabled={busy} className="primary-button w-full" type="submit">{busy ? "Đang xử lý..." : role === "student" ? "Xem danh sách đề" : teacherMode === "signup" ? "Tạo tài khoản" : "Mở bảng điều khiển"}<ArrowRight className="h-4 w-4" /></button>
             </form>
 
             {role === "teacher" && cloudReady && <button type="button" className="mt-4 w-full text-center text-xs font-bold text-teal-700" onClick={() => { setTeacherMode(teacherMode === "login" ? "signup" : "login"); setError(""); setNotice(""); }}>{teacherMode === "login" ? "Chưa có tài khoản? Đăng ký giảng viên" : "Đã có tài khoản? Đăng nhập"}</button>}

@@ -12,6 +12,9 @@ Website thi trực tuyến nhiều giảng viên, có ngân hàng câu hỏi ri�
 - Dashboard giảng viên, cấp/đổi mật khẩu, xuất danh sách CSV và xem nhật ký vi phạm.
 - Đăng ký/đăng nhập giảng viên với Supabase Auth; dữ liệu được tách bằng Row Level Security.
 - Tạo nhiều ngân hàng câu hỏi, nhập CSV, thêm/xóa câu và sinh đề ngẫu nhiên có snapshot.
+- Sinh viên đăng nhập bằng mã sinh viên, xem danh sách đề đang mở/đã khóa và nhập mật khẩu riêng của file đề.
+- File đề có vòng đời nháp → mở → khóa → lưu trữ; chỉ nháp chưa có lượt làm được xóa.
+- Hiển thị dung lượng và tự chặn tạo file đề khi database gần đầy.
 - Phòng thi 45 phút với 10 câu hỏi, lưu đáp án, đánh dấu câu và nộp bài.
 - Ghi nhận rời tab, mất fullscreen, copy/cut/paste và mở menu chuột phải.
 - Phát hiện không thấy mặt, nhiều khuôn mặt, nhìn lệch kéo dài và điện thoại bằng MediaPipe chạy ngay trong trình duyệt.
@@ -42,3 +45,5 @@ Khi chưa đặt biến Supabase, ứng dụng tự chạy ở chế độ demo 
 4. Trong Supabase Auth, thêm `https://examguard-phi.vercel.app/**` vào Redirect URLs.
 
 File CSV mẫu có các cột: `content`, `option_a`, `option_b`, `option_c`, `option_d`, `correct_answer`, `difficulty`, `topic`.
+
+Giới hạn mặc định trong `examguard_settings` là 500 MB, phù hợp Supabase Free. Khi nâng gói, cập nhật `database_limit_bytes` theo dung lượng database mới.

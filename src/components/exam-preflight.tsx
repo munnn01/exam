@@ -3,16 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Camera, Check, ChevronRight, Clock3, LockKeyhole, Maximize2, MonitorCheck, ShieldCheck, Video, Wifi, X } from "lucide-react";
 import { Brand } from "./brand";
-import { EXAM } from "@/lib/demo-data";
-import type { StudentCredential } from "@/lib/types";
+import type { ActiveExam, StudentCredential } from "@/lib/types";
 
 interface ExamPreflightProps {
   student: StudentCredential;
+  exam: ActiveExam;
   onBack: () => void;
   onStart: () => void;
 }
 
-export function ExamPreflight({ student, onBack, onStart }: ExamPreflightProps) {
+export function ExamPreflight({ student, exam, onBack, onStart }: ExamPreflightProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
@@ -71,11 +71,11 @@ export function ExamPreflight({ student, onBack, onStart }: ExamPreflightProps) 
           <div className="panel mt-7 overflow-hidden">
             <div className="border-b border-slate-100 bg-slate-50/70 p-5">
               <div className="text-[10px] font-bold uppercase tracking-[.18em] text-teal-700">Thông tin kỳ thi</div>
-              <h2 className="mt-2 text-lg font-bold tracking-[-.025em] text-slate-950">{EXAM.title}</h2>
+              <h2 className="mt-2 text-lg font-bold tracking-[-.025em] text-slate-950">{exam.title}</h2>
             </div>
             <div className="grid gap-4 p-5 sm:grid-cols-2">
-              <Info icon={Clock3} label="Thời lượng" value={`${EXAM.durationMinutes} phút`} />
-              <Info icon={LockKeyhole} label="Mã kỳ thi" value={EXAM.code} />
+              <Info icon={Clock3} label="Thời lượng" value={`${exam.durationMinutes} phút`} />
+              <Info icon={LockKeyhole} label="Mã kỳ thi" value={exam.code} />
               <Info icon={Video} label="Giám sát" value="Camera + trình duyệt" />
               <Info icon={Wifi} label="Kết nối" value={navigator.onLine ? "Đang trực tuyến" : "Ngoại tuyến"} />
             </div>

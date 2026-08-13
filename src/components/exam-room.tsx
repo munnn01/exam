@@ -14,27 +14,26 @@ import {
   Menu,
   ScanFace,
   ShieldCheck,
-  Smartphone,
-  Video,
   X,
 } from "lucide-react";
 import { Brand } from "./brand";
-import { EXAM, QUESTIONS, VIOLATION_LABELS } from "@/lib/demo-data";
+import { VIOLATION_LABELS } from "@/lib/demo-data";
 import { appendEvent } from "@/lib/store";
-import type { ProctorEvent, StudentCredential } from "@/lib/types";
+import type { ActiveExam, ProctorEvent, StudentCredential } from "@/lib/types";
 import { useProctoring } from "@/hooks/use-proctoring";
 
 interface ExamRoomProps {
   student: StudentCredential;
-  onFinish: (result: { score: number; total: number; violations: number; answers: Record<number, number> }) => void;
+  exam: ActiveExam;
+  onFinish: (result: { score: number | null; total: number; violations: number; answers: Record<number, number> }) => void;
 }
 
-export function ExamRoom({ student, onFinish }: ExamRoomProps) {
+export function ExamRoom({ student, exam, onFinish }: ExamRoomProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [flagged, setFlagged] = useState<number[]>([]);
-  const [remaining, setRemaining] = useState(EXAM.durationMinutes * 60);
+  const [remaining, setRemaining] = useState(exam.durationMinutes * 60);
   const [violations, setViolations] = useState<ProctorEvent[]>([]);
   const [toast, setToast] = useState<ProctorEvent | null>(null);
   const [finishing, setFinishing] = useState(false);
@@ -60,25 +59,26 @@ export function ExamRoom({ student, onFinish }: ExamRoomProps) {
   const finish = useCallback(async () => {
     if (finishing) return;
     setFinishing(true);
-    const score = QUESTIONS.reduce((sum, question) => sum + (answers[question.id] === question.answer ? 1 : 0), 0);
+    const canGradeLocally = exam.questions.every((question) => typeof question.answer === "number");
+    const score = canGradeLocally ? exam.questions.reduce((sum, question) => sum + (answers[question.id] === question.answer ? 1 : 0), 0) : null;
     if (document.fullscreenElement) await document.exitFullscreen().catch(() => undefined);
-    onFinish({ score, total: QUESTIONS.length, violations: violations.length, answers });
-  }, [answers, finishing, onFinish, violations.length]);
+    onFinish({ score, total: exam.questions.length, violations: violations.length, answers });
+  }, [answers, exam.questions, finishing, onFinish, violations.length]);
 
   useEffect(() => {
-    const timer = setInterval(() => setRemaining((current) => Math.max(0, current - 1)), 1000);
+    const timer = setInterval(() => setRemaining((current) => {
+      const next = Math.max(0, current - 1);
+      if (next === 0 && current !== 0) setTimeout(() => void finish(), 0);
+      return next;
+    }), 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [finish]);
 
-  useEffect(() => {
-    if (remaining === 0) void finish();
-  }, [finish, remaining]);
-
-  const question = QUESTIONS[questionIndex];
+  const question = exam.questions[questionIndex]!;
   const answeredCount = Object.keys(answers).length;
   const minutes = Math.floor(remaining / 60).toString().padStart(2, "0");
   const seconds = (remaining % 60).toString().padStart(2, "0");
-  const progress = Math.round((answeredCount / QUESTIONS.length) * 100);
+  const progress = Math.round((answeredCount / exam.questions.length) * 100);
 
   const statusItems = useMemo(() => [
     { label: "Camera", ok: monitor.camera === "active", icon: Camera },
@@ -93,7 +93,7 @@ export function ExamRoom({ student, onFinish }: ExamRoomProps) {
           <Brand compact />
           <div className="hidden h-7 w-px bg-slate-200 md:block" />
           <div className="min-w-0">
-            <div className="truncate text-xs font-bold text-slate-900 md:text-sm">{EXAM.title}</div>
+            <div className="truncate text-xs font-bold text-slate-900 md:text-sm">{exam.title}</div>
             <div className="mt-0.5 hidden text-[10px] text-slate-500 sm:block">{student.name} · {student.id}</div>
           </div>
         </div>
@@ -107,9 +107,9 @@ export function ExamRoom({ student, onFinish }: ExamRoomProps) {
       <div className="mx-auto grid max-w-[1500px] gap-5 p-3 md:p-5 xl:grid-cols-[230px_minmax(0,1fr)_285px]">
         <aside className={`exam-nav ${navOpen ? "open" : ""}`}>
           <div className="flex items-center justify-between xl:hidden"><div className="text-sm font-bold">Danh sách câu hỏi</div><button className="icon-button" onClick={() => setNavOpen(false)}><X className="h-5 w-5" /></button></div>
-          <div className="hidden xl:block"><div className="text-[10px] font-bold uppercase tracking-[.16em] text-slate-400">Tiến độ làm bài</div><div className="mt-2 flex items-end justify-between"><span className="text-2xl font-bold tracking-[-.04em] text-slate-950">{answeredCount}/{QUESTIONS.length}</span><span className="text-[10px] font-bold text-teal-700">{progress}%</span></div><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-teal-600 transition-all" style={{ width: `${progress}%` }} /></div></div>
+          <div className="hidden xl:block"><div className="text-[10px] font-bold uppercase tracking-[.16em] text-slate-400">Tiến độ làm bài</div><div className="mt-2 flex items-end justify-between"><span className="text-2xl font-bold tracking-[-.04em] text-slate-950">{answeredCount}/{exam.questions.length}</span><span className="text-[10px] font-bold text-teal-700">{progress}%</span></div><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-teal-600 transition-all" style={{ width: `${progress}%` }} /></div></div>
           <div className="mt-6 grid grid-cols-5 gap-2 xl:grid-cols-4">
-            {QUESTIONS.map((item, index) => <button key={item.id} className={`question-dot ${index === questionIndex ? "current" : ""} ${answers[item.id] !== undefined ? "answered" : ""} ${flagged.includes(item.id) ? "flagged" : ""}`} onClick={() => { setQuestionIndex(index); setNavOpen(false); }}>{item.id}</button>)}
+            {exam.questions.map((item, index) => <button key={item.id} className={`question-dot ${index === questionIndex ? "current" : ""} ${answers[item.id] !== undefined ? "answered" : ""} ${flagged.includes(item.id) ? "flagged" : ""}`} onClick={() => { setQuestionIndex(index); setNavOpen(false); }}>{item.id}</button>)}
           </div>
           <div className="mt-6 space-y-2 border-t border-slate-100 pt-5 text-[10px] text-slate-500"><Legend color="bg-teal-700" label="Đã trả lời" /><Legend color="border-2 border-teal-700" label="Câu hiện tại" /><Legend color="bg-amber-400" label="Đánh dấu xem lại" /></div>
           <button className="secondary-button mt-6 w-full justify-center sm:hidden" onClick={() => void finish()}><Flag className="h-4 w-4" /> Nộp bài</button>
@@ -132,8 +132,8 @@ export function ExamRoom({ student, onFinish }: ExamRoomProps) {
           </div>
           <div className="mt-auto flex items-center justify-between border-t border-slate-100 px-5 py-4 md:px-8">
             <button className="secondary-button" disabled={questionIndex === 0} onClick={() => setQuestionIndex((current) => Math.max(0, current - 1))}><ChevronLeft className="h-4 w-4" /> Câu trước</button>
-            <div className="hidden text-[11px] text-slate-400 sm:block">Câu {questionIndex + 1} trên {QUESTIONS.length}</div>
-            {questionIndex < QUESTIONS.length - 1 ? <button className="primary-button !h-10 !px-5" onClick={() => setQuestionIndex((current) => Math.min(QUESTIONS.length - 1, current + 1))}>Câu tiếp <ChevronRight className="h-4 w-4" /></button> : <button className="primary-button !h-10 !px-5" onClick={() => void finish()}>Nộp bài <Flag className="h-4 w-4" /></button>}
+            <div className="hidden text-[11px] text-slate-400 sm:block">Câu {questionIndex + 1} trên {exam.questions.length}</div>
+            {questionIndex < exam.questions.length - 1 ? <button className="primary-button !h-10 !px-5" onClick={() => setQuestionIndex((current) => Math.min(exam.questions.length - 1, current + 1))}>Câu tiếp <ChevronRight className="h-4 w-4" /></button> : <button className="primary-button !h-10 !px-5" onClick={() => void finish()}>Nộp bài <Flag className="h-4 w-4" /></button>}
           </div>
         </section>
 

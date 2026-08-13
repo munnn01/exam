@@ -1,4 +1,4 @@
-export type AppView = "login" | "teacher" | "preflight" | "exam" | "finished";
+export type AppView = "login" | "teacher" | "student-portal" | "preflight" | "exam" | "finished";
 
 export type ViolationType =
   | "TAB_HIDDEN"
@@ -41,7 +41,7 @@ export interface Question {
   id: number;
   text: string;
   options: string[];
-  answer: number;
+  answer?: number;
 }
 
 export interface TeacherIdentity {
@@ -83,8 +83,31 @@ export interface GeneratedExam {
   title: string;
   durationMinutes: number;
   questionCount: number;
-  status: "draft" | "open" | "closed";
+  status: "draft" | "open" | "closed" | "archived";
+  accessPassword?: string;
+  attemptCount: number;
   createdAt: string;
+}
+
+export interface StudentExamSummary {
+  id: string;
+  code: string;
+  title: string;
+  teacherName: string;
+  durationMinutes: number;
+  questionCount: number;
+  status: "open" | "closed";
+}
+
+export interface ActiveExam extends StudentExamSummary {
+  questions: Question[];
+}
+
+export interface StorageStatus {
+  usedBytes: number;
+  limitBytes: number;
+  percent: number;
+  full: boolean;
 }
 
 export interface MonitorStatus {

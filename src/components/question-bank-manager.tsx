@@ -8,11 +8,12 @@ import {
   createGeneratedExam,
   createQuestionBank,
   deleteQuestion,
+  getStorageStatus,
   listBankQuestions,
   listQuestionBanks,
   type QuestionInput,
 } from "@/lib/question-store";
-import type { BankQuestion, QuestionBank, QuestionDifficulty, TeacherIdentity } from "@/lib/types";
+import type { BankQuestion, QuestionDifficulty, QuestionBank, StorageStatus, TeacherIdentity } from "@/lib/types";
 
 interface QuestionBankManagerProps {
   teacher: TeacherIdentity;
@@ -26,6 +27,7 @@ export function QuestionBankManager({ teacher }: QuestionBankManagerProps) {
   const [questions, setQuestions] = useState<BankQuestion[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [storage, setStorage] = useState<StorageStatus | null>(null);
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [modal, setModal] = useState<"bank" | "question" | "import" | "exam" | null>(null);
 
@@ -59,7 +61,6 @@ export function QuestionBankManager({ teacher }: QuestionBankManagerProps) {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     void listQuestionBanks(teacher)
       .then((nextBanks) => {
         if (cancelled) return;
@@ -74,9 +75,12 @@ export function QuestionBankManager({ teacher }: QuestionBankManagerProps) {
   }, [teacher]);
 
   useEffect(() => {
+    void getStorageStatus(teacher).then(setStorage).catch(() => undefined);
+  }, [teacher]);
+
+  useEffect(() => {
     let cancelled = false;
     if (!selectedBankId) {
-      setQuestions([]);
       return () => { cancelled = true; };
     }
     void listBankQuestions(teacher, selectedBankId)
@@ -101,6 +105,7 @@ export function QuestionBankManager({ teacher }: QuestionBankManagerProps) {
       </div>
 
       {message && <div className={`mt-5 flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm font-semibold ${message.tone === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"}`}><span>{message.text}</span><button onClick={() => setMessage(null)}><X className="h-4 w-4" /></button></div>}
+      {storage?.full && <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">Dữ liệu đã đầy, không thể tạo thêm file đề. Bạn vẫn có thể xem dữ liệu hiện có; hãy xóa bản nháp không dùng hoặc nâng dung lượng.</div>}
 
       <div className="mt-7 grid gap-6 xl:grid-cols-[300px_1fr]">
         <aside className="panel h-fit p-4">
@@ -111,7 +116,7 @@ export function QuestionBankManager({ teacher }: QuestionBankManagerProps) {
 
         <div>
           {selectedBank ? <>
-            <div className="panel p-5"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="text-xl font-bold tracking-[-.035em]">{selectedBank.name}</h2><p className="mt-1 text-xs text-slate-500">{selectedBank.description || "Chưa có mô tả"}</p></div><button className="secondary-button" disabled={!questions.length} onClick={() => setModal("exam")}><Sparkles className="h-4 w-4 text-amber-500" /> Tạo đề tự động</button></div><div className="relative mt-5 max-w-lg"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" /><input className="search-input" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm nội dung hoặc chủ đề..." /></div></div>
+            <div className="panel p-5"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="text-xl font-bold tracking-[-.035em]">{selectedBank.name}</h2><p className="mt-1 text-xs text-slate-500">{selectedBank.description || "Chưa có mô tả"}</p></div><button className="secondary-button" disabled={!questions.length || storage?.full} onClick={() => setModal("exam")}><Sparkles className="h-4 w-4 text-amber-500" /> {storage?.full ? "Dữ liệu đã đầy" : "Tạo đề tự động"}</button></div><div className="relative mt-5 max-w-lg"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" /><input className="search-input" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm nội dung hoặc chủ đề..." /></div></div>
             <div className="panel mt-4 overflow-hidden">{filteredQuestions.length ? <div className="overflow-x-auto"><table className="data-table min-w-[780px]"><thead><tr><th>Câu hỏi</th><th>Chủ đề</th><th>Độ khó</th><th>Đáp án</th><th /></tr></thead><tbody>{filteredQuestions.map((question) => <tr key={question.id}><td className="max-w-xl"><div className="text-xs font-bold leading-5 text-slate-900">{question.content}</div><div className="mt-2 line-clamp-1 text-[10px] text-slate-500">{question.options.map((option, index) => `${String.fromCharCode(65 + index)}. ${option}`).join(" · ")}</div></td><td className="text-xs text-slate-600">{question.topic || "—"}</td><td><span className={`question-difficulty ${question.difficulty}`}>{difficultyLabels[question.difficulty]}</span></td><td><code className="code-pill">{String.fromCharCode(65 + question.correctAnswer)}</code></td><td><button className="icon-button text-rose-500" aria-label="Xóa câu hỏi" onClick={async () => { if (!window.confirm("Xóa câu hỏi này?")) return; await deleteQuestion(teacher, question.id); await refresh("Đã xóa câu hỏi."); }}><Trash2 className="h-4 w-4" /></button></td></tr>)}</tbody></table></div> : <EmptyQuestions onAdd={() => setModal("question")} onImport={() => setModal("import")} />}</div>
           </> : <div className="panel grid min-h-[420px] place-items-center p-8 text-center"><div><BookOpenCheck className="mx-auto h-10 w-10 text-slate-300" /><h2 className="mt-4 text-lg font-bold">Chọn hoặc tạo một bộ câu hỏi</h2><p className="mt-2 text-sm text-slate-500">Mỗi bộ có thể dùng để sinh nhiều đề thi khác nhau.</p></div></div>}
         </div>
@@ -150,9 +155,9 @@ function ImportModal({ bank, onClose, onImport }: { bank: QuestionBank; onClose:
   return <ModalShell eyebrow="Thêm hàng loạt" title={`Nhập CSV vào ${bank.name}`} onClose={onClose}><div className="mt-6 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-7 text-center"><FileUp className="mx-auto h-8 w-8 text-teal-600" /><div className="mt-3 text-sm font-bold">{fileName || "Chọn file CSV UTF-8"}</div><div className="mt-1 text-xs text-slate-500">Tối đa 100 MB; mỗi dòng là một câu có 4 phương án.</div><input ref={inputRef} className="hidden" type="file" accept=".csv,text/csv" onChange={(event) => { const file = event.target.files?.[0]; if (file) parseFile(file); }} /><div className="mt-5 flex flex-wrap justify-center gap-2"><button className="secondary-button" onClick={downloadTemplate}><Download className="h-4 w-4" /> Tải file mẫu</button><button className="primary-button" onClick={() => inputRef.current?.click()}><FileUp className="h-4 w-4" /> Chọn file</button></div></div>{rows.length > 0 && <div className="mt-4 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-700"><CheckCircle2 className="h-5 w-5" /> Đã kiểm tra {rows.length} câu hợp lệ.</div>}{error && <ErrorBox text={error} />}<div className="mt-6 flex justify-end gap-2"><button className="secondary-button" onClick={onClose}>Hủy</button><button disabled={!rows.length || busy} className="primary-button" onClick={async () => { setBusy(true); setError(""); try { await onImport(rows); } catch (cause) { setError(cause instanceof Error ? cause.message : "Không thể nhập CSV."); setBusy(false); } }}>{busy ? "Đang nhập..." : `Nhập ${rows.length || 0} câu`}</button></div></ModalShell>;
 }
 
-function ExamModal({ bank, availableCount, onClose, onCreate }: { bank: QuestionBank; availableCount: number; onClose: () => void; onCreate: (input: { bankId: string; code: string; title: string; durationMinutes: number; questionCount: number }) => Promise<void> }) {
-  const [form, setForm] = useState({ code: `DE-${String(Date.now()).slice(-6)}`, title: `Đề thi — ${bank.subject || bank.name}`, durationMinutes: 45, questionCount: Math.min(10, availableCount) }); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
-  return <ModalShell eyebrow="Lấy ngẫu nhiên và đóng băng nội dung" title="Tạo đề tự động" onClose={onClose}><form onSubmit={async (event) => { event.preventDefault(); setBusy(true); setError(""); try { await onCreate({ bankId: bank.id, ...form, code: form.code.trim().toUpperCase() }); } catch (cause) { setError(cause instanceof Error ? cause.message : "Không thể tạo đề."); setBusy(false); } }}><div className="mt-6 rounded-xl bg-teal-50 p-4 text-xs leading-5 text-teal-900">Ngân hàng có <strong>{availableCount} câu</strong>. Hệ thống sẽ chọn ngẫu nhiên và lưu bản chụp câu hỏi để việc sửa ngân hàng sau này không làm thay đổi đề.</div><div className="mt-5 grid gap-4 sm:grid-cols-2"><FormField label="Mã đề"><input className="form-input uppercase" required value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} /></FormField><FormField label="Thời lượng (phút)"><input className="form-input" type="number" min={5} max={360} value={form.durationMinutes} onChange={(e) => setForm({ ...form, durationMinutes: Number(e.target.value) })} /></FormField><div className="sm:col-span-2"><FormField label="Tên đề"><input className="form-input" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></FormField></div><FormField label="Số câu"><input className="form-input" type="number" min={1} max={availableCount} value={form.questionCount} onChange={(e) => setForm({ ...form, questionCount: Number(e.target.value) })} /></FormField></div>{error && <ErrorBox text={error} />}<ModalActions busy={busy} onClose={onClose} submitLabel="Tạo đề" /></form></ModalShell>;
+function ExamModal({ bank, availableCount, onClose, onCreate }: { bank: QuestionBank; availableCount: number; onClose: () => void; onCreate: (input: { bankId: string; code: string; title: string; durationMinutes: number; questionCount: number; password: string }) => Promise<void> }) {
+  const [form, setForm] = useState(() => ({ code: `DE-${String(Date.now()).slice(-6)}`, title: `Đề thi — ${bank.subject || bank.name}`, durationMinutes: 45, questionCount: Math.min(10, availableCount), password: String(Math.floor(100000 + Math.random() * 900000)) })); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
+  return <ModalShell eyebrow="Lấy ngẫu nhiên và đóng băng nội dung" title="Tạo đề tự động" onClose={onClose}><form onSubmit={async (event) => { event.preventDefault(); setBusy(true); setError(""); try { await onCreate({ bankId: bank.id, ...form, code: form.code.trim().toUpperCase() }); } catch (cause) { setError(cause instanceof Error ? cause.message : "Không thể tạo đề."); setBusy(false); } }}><div className="mt-6 rounded-xl bg-teal-50 p-4 text-xs leading-5 text-teal-900">Ngân hàng có <strong>{availableCount} câu</strong>. Hệ thống sẽ chọn ngẫu nhiên và lưu bản chụp câu hỏi để việc sửa ngân hàng sau này không làm thay đổi đề.</div><div className="mt-5 grid gap-4 sm:grid-cols-2"><FormField label="Mã đề"><input className="form-input uppercase" required value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} /></FormField><FormField label="Mật khẩu mở đề"><input className="form-input font-mono tracking-[.12em]" required minLength={4} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></FormField><div className="sm:col-span-2"><FormField label="Tên đề"><input className="form-input" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></FormField></div><FormField label="Thời lượng (phút)"><input className="form-input" type="number" min={5} max={360} value={form.durationMinutes} onChange={(e) => setForm({ ...form, durationMinutes: Number(e.target.value) })} /></FormField><FormField label="Số câu"><input className="form-input" type="number" min={1} max={availableCount} value={form.questionCount} onChange={(e) => setForm({ ...form, questionCount: Number(e.target.value) })} /></FormField></div>{error && <ErrorBox text={error} />}<ModalActions busy={busy} onClose={onClose} submitLabel="Tạo đề" /></form></ModalShell>;
 }
 
 function FormField({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block"><span className="form-label">{label}</span>{children}</label>; }

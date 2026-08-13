@@ -8,8 +8,8 @@ import {
   BookOpenCheck,
   CheckCircle2,
   ClipboardList,
-  Copy,
   Download,
+  Files,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -24,9 +24,10 @@ import {
   X,
 } from "lucide-react";
 import { Brand } from "./brand";
+import { ExamFileManager } from "./exam-file-manager";
 import { QuestionBankManager } from "./question-bank-manager";
-import { EXAM, VIOLATION_LABELS } from "@/lib/demo-data";
-import { formatTime, makePassword, saveStudents } from "@/lib/store";
+import { VIOLATION_LABELS } from "@/lib/demo-data";
+import { formatTime, saveStudents } from "@/lib/store";
 import type { ProctorEvent, StudentCredential, TeacherIdentity, ViolationType } from "@/lib/types";
 
 interface TeacherDashboardProps {
@@ -40,7 +41,8 @@ interface TeacherDashboardProps {
 const navItems = [
   { id: "overview", label: "Tổng quan", icon: LayoutDashboard },
   { id: "questions", label: "Ngân hàng câu hỏi", icon: BookOpenCheck },
-  { id: "students", label: "Sinh viên & mật khẩu", icon: Users },
+  { id: "exam-files", label: "File đề thi", icon: Files },
+  { id: "students", label: "Danh sách sinh viên", icon: Users },
   { id: "events", label: "Nhật ký giám sát", icon: ShieldAlert },
   { id: "settings", label: "Cấu hình kỳ thi", icon: Settings },
 ] as const;
@@ -49,7 +51,6 @@ export function TeacherDashboard({ teacher, events, students, onStudentsChange, 
   const [section, setSection] = useState<(typeof navItems)[number]["id"]>("overview");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showAddStudent, setShowAddStudent] = useState(false);
-  const [copied, setCopied] = useState("");
   const [query, setQuery] = useState("");
 
   const highRisk = events.filter((event) => event.severity === "high").length;
@@ -57,25 +58,19 @@ export function TeacherDashboard({ teacher, events, students, onStudentsChange, 
     `${event.studentName} ${event.studentId} ${VIOLATION_LABELS[event.type]}`.toLowerCase().includes(query.toLowerCase()),
   );
 
-  const copyText = async (text: string, key: string) => {
-    await navigator.clipboard.writeText(text);
-    setCopied(key);
-    setTimeout(() => setCopied(""), 1600);
-  };
-
   const updateStudents = (next: StudentCredential[]) => {
     saveStudents(next);
     onStudentsChange(next);
   };
 
   const exportCsv = () => {
-    const header = "Ma sinh vien,Ho ten,Mat khau,Ma ky thi,Trang thai";
-    const rows = students.map((s) => [s.id, s.name, s.password, s.examCode, s.status].join(","));
+    const header = "Ma sinh vien,Ho ten,Trang thai";
+    const rows = students.map((s) => [s.id, s.name, s.status].join(","));
     const blob = new Blob(["\uFEFF" + [header, ...rows].join("\n")], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `examguard-${EXAM.code}-students.csv`;
+    anchor.download = "examguard-danh-sach-sinh-vien.csv";
     anchor.click();
     URL.revokeObjectURL(url);
   };
@@ -117,8 +112,8 @@ export function TeacherDashboard({ teacher, events, students, onStudentsChange, 
           <div className="flex items-center gap-3">
             <button className="rounded-lg p-2 hover:bg-slate-100 lg:hidden" onClick={() => setSidebarOpen(true)} aria-label="Mở menu"><Menu className="h-5 w-5" /></button>
             <div>
-              <div className="text-sm font-bold text-slate-950">{EXAM.title}</div>
-              <div className="mt-0.5 flex items-center gap-2 text-[11px] text-slate-500"><span>{EXAM.code}</span><span>•</span><span>{EXAM.durationMinutes} phút</span></div>
+              <div className="text-sm font-bold text-slate-950">Trung tâm quản lý ExamGuard</div>
+              <div className="mt-0.5 text-[11px] text-slate-500">{teacher.email}</div>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -134,9 +129,11 @@ export function TeacherDashboard({ teacher, events, students, onStudentsChange, 
 
           {section === "questions" && <QuestionBankManager teacher={teacher} />}
 
+          {section === "exam-files" && <ExamFileManager teacher={teacher} />}
+
           {section === "students" && (
             <section>
-              <PageHeading eyebrow="Quản lý truy cập" title="Sinh viên & mật khẩu" copy="Cấp mã dự thi riêng và tải danh sách để gửi cho sinh viên." />
+              <PageHeading eyebrow="Quản lý truy cập" title="Danh sách sinh viên" copy="Sinh viên dùng mã sinh viên để xem các file đề; mật khẩu được cấp riêng theo từng đề." />
               <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
                 <div className="text-sm text-slate-500">{students.length} sinh viên trong kỳ thi</div>
                 <div className="flex gap-2">
@@ -147,15 +144,12 @@ export function TeacherDashboard({ teacher, events, students, onStudentsChange, 
               <div className="panel mt-4 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="data-table min-w-[780px]">
-                    <thead><tr><th>Sinh viên</th><th>Mã dự thi</th><th>Mật khẩu</th><th>Trạng thái</th><th /></tr></thead>
+                    <thead><tr><th>Sinh viên</th><th>Trạng thái gần nhất</th></tr></thead>
                     <tbody>
                       {students.map((student) => (
                         <tr key={student.id}>
                           <td><div className="font-bold text-slate-900">{student.name}</div><div className="mt-1 text-[11px] text-slate-500">{student.id}</div></td>
-                          <td><code className="code-pill">{student.examCode}</code></td>
-                          <td><div className="flex items-center gap-2"><code className="font-mono text-sm font-bold tracking-[.12em] text-slate-800">{student.password}</code><button className="icon-button" onClick={() => copyText(student.password, student.id)} aria-label="Sao chép mật khẩu">{copied === student.id ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}</button></div></td>
                           <td><StatusBadge status={student.status} /></td>
-                          <td><button className="text-xs font-bold text-teal-700" onClick={() => updateStudents(students.map((item) => item.id === student.id ? { ...item, password: makePassword() } : item))}>Tạo lại mã</button></td>
                         </tr>
                       ))}
                     </tbody>
@@ -256,8 +250,8 @@ function PageHeading({ eyebrow, title, copy }: { eyebrow: string; title: string;
 }
 
 function AddStudentModal({ onClose, onAdd }: { onClose: () => void; onAdd: (student: StudentCredential) => void }) {
-  const [form, setForm] = useState({ id: "", name: "", password: makePassword() });
-  return <div className="modal-backdrop"><form className="modal-card" onSubmit={(e) => { e.preventDefault(); if (form.id.trim() && form.name.trim()) onAdd({ ...form, id: form.id.toUpperCase(), examCode: EXAM.code, status: "Chưa thi" }); }}><div className="flex items-center justify-between"><div><div className="text-xs font-bold text-teal-700">Cấp quyền dự thi</div><h2 className="mt-1 text-2xl font-bold tracking-[-.04em]">Thêm sinh viên</h2></div><button type="button" className="icon-button" onClick={onClose}><X className="h-5 w-5" /></button></div><div className="mt-6 space-y-4"><label className="block"><span className="form-label">Mã sinh viên</span><input className="form-input" value={form.id} onChange={(e) => setForm({ ...form, id: e.target.value })} placeholder="SV005" /></label><label className="block"><span className="form-label">Họ và tên</span><input className="form-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Nguyễn Văn A" /></label><label className="block"><span className="form-label">Mật khẩu 6 số</span><div className="flex gap-2"><input className="form-input font-mono tracking-[.15em]" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /><button type="button" className="secondary-button shrink-0" onClick={() => setForm({ ...form, password: makePassword() })}>Tạo mã</button></div></label></div><div className="mt-7 flex justify-end gap-2"><button type="button" className="secondary-button" onClick={onClose}>Hủy</button><button className="primary-button !h-10 !px-5" type="submit"><Plus className="h-4 w-4" /> Thêm sinh viên</button></div></form></div>;
+  const [form, setForm] = useState({ id: "", name: "" });
+  return <div className="modal-backdrop"><form className="modal-card" onSubmit={(e) => { e.preventDefault(); if (form.id.trim() && form.name.trim()) onAdd({ ...form, id: form.id.toUpperCase(), password: "", examCode: "", status: "Chưa thi" }); }}><div className="flex items-center justify-between"><div><div className="text-xs font-bold text-teal-700">Cấp quyền dự thi</div><h2 className="mt-1 text-2xl font-bold tracking-[-.04em]">Thêm sinh viên</h2></div><button type="button" className="icon-button" onClick={onClose}><X className="h-5 w-5" /></button></div><div className="mt-6 space-y-4"><label className="block"><span className="form-label">Mã sinh viên</span><input className="form-input" value={form.id} onChange={(e) => setForm({ ...form, id: e.target.value })} placeholder="SV005" /></label><label className="block"><span className="form-label">Họ và tên</span><input className="form-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Nguyễn Văn A" /></label><div className="rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600">Không cần cấp mật khẩu cho sinh viên tại đây. Mật khẩu được tạo khi giảng viên tạo file đề.</div></div><div className="mt-7 flex justify-end gap-2"><button type="button" className="secondary-button" onClick={onClose}>Hủy</button><button className="primary-button !h-10 !px-5" type="submit"><Plus className="h-4 w-4" /> Thêm sinh viên</button></div></form></div>;
 }
 
 function ExamSettings() {

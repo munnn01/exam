@@ -115,6 +115,7 @@ export function useProctoring({ enabled, videoRef, onViolation }: UseProctoringO
 
   useEffect(() => {
     if (!enabled) return;
+    const videoElement = videoRef.current;
     let cancelled = false;
     let timer: ReturnType<typeof setInterval> | undefined;
     let stream: MediaStream | undefined;
@@ -153,7 +154,7 @@ export function useProctoring({ enabled, videoRef, onViolation }: UseProctoringO
           audio: false,
         });
         if (cancelled) return;
-        const video = videoRef.current;
+        const video = videoElement;
         if (!video) return;
         video.srcObject = stream;
         await video.play();
@@ -204,7 +205,7 @@ export function useProctoring({ enabled, videoRef, onViolation }: UseProctoringO
       }
 
       timer = setInterval(() => {
-        const video = videoRef.current;
+        const video = videoElement;
         if (cancelled || !video || video.readyState < 2 || !faceLandmarker) return;
         const timestamp = performance.now();
         try {
@@ -287,7 +288,7 @@ export function useProctoring({ enabled, videoRef, onViolation }: UseProctoringO
       stream?.getTracks().forEach((track) => track.stop());
       faceLandmarker?.close?.();
       objectDetector?.close?.();
-      if (videoRef.current) videoRef.current.srcObject = null;
+      if (videoElement) videoElement.srcObject = null;
     };
   }, [enabled, record, takeSnapshot, videoRef]);
 

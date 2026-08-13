@@ -39,13 +39,8 @@ export function saveStudents(students: StudentCredential[]) {
   window.dispatchEvent(new Event("examguard:students"));
 }
 
-export function validateStudent(examCode: string, studentId: string, password: string) {
-  return getStudents().find(
-    (student) =>
-      student.examCode.toUpperCase() === examCode.trim().toUpperCase() &&
-      student.id.toUpperCase() === studentId.trim().toUpperCase() &&
-      student.password === password,
-  );
+export function findStudent(studentId: string) {
+  return getStudents().find((student) => student.id.toUpperCase() === studentId.trim().toUpperCase());
 }
 
 export function formatTime(iso: string) {
