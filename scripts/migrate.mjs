@@ -1,6 +1,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import process from "node:process";
 import postgres from "postgres";
+
+try {
+  process.loadEnvFile(".env.local");
+} catch (cause) {
+  if (!(cause instanceof Error) || !cause.message.includes("ENOENT")) throw cause;
+}
 
 const connectionString = process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_URL;
 if (!connectionString) {
