@@ -44,6 +44,6 @@ Khi chưa đặt biến Supabase, ứng dụng tự chạy ở chế độ demo 
 3. Chạy `pnpm db:migrate` để tạo bảng, trigger và chính sách RLS.
 4. Trong Supabase Auth, thêm `https://examguard-phi.vercel.app/**` vào Redirect URLs.
 
-File CSV mẫu có các cột: `content`, `option_a`, `option_b`, `option_c`, `option_d`, `correct_answer`, `difficulty`, `topic`.
+Tải file `mau-cau-hoi.csv` ngay cạnh nút **Nhập CSV**. File có 6 cột: `content`, `option_a`, `option_b`, `option_c`, `option_d`, `correct_answer`; đáp án đúng nhận `A`, `B`, `C`, `D` hoặc `1`, `2`, `3`, `4`. Khi chọn file hợp lệ, hệ thống tự động tạo toàn bộ câu hỏi và đáp án.
 
 Giới hạn mặc định trong `examguard_settings` là 500 MB, phù hợp Supabase Free. Khi nâng gói, cập nhật `database_limit_bytes` theo dung lượng database mới.

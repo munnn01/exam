@@ -19,8 +19,6 @@ export interface QuestionInput {
   content: string;
   options: string[];
   correctAnswer: number;
-  difficulty: QuestionDifficulty;
-  topic: string;
 }
 
 export interface ExamInput {
@@ -212,11 +210,11 @@ export async function addQuestions(teacher: TeacherIdentity, bankId: string, inp
   if (!inputs.length) return 0;
   if (!isSupabaseConfigured() || teacher.isDemo) {
     const createdAt = new Date().toISOString();
-    const rows: BankQuestion[] = inputs.map((input) => ({ id: crypto.randomUUID(), teacherId: teacher.id, bankId, ...input, createdAt }));
+    const rows: BankQuestion[] = inputs.map((input) => ({ id: crypto.randomUUID(), teacherId: teacher.id, bankId, ...input, difficulty: "medium", topic: "", createdAt }));
     writeLocal(QUESTIONS_KEY, [...rows, ...readLocal<BankQuestion[]>(QUESTIONS_KEY, [])]);
     return rows.length;
   }
-  const rows = inputs.map((input) => ({ teacher_id: teacher.id, bank_id: bankId, content: input.content, options: input.options, correct_answer: input.correctAnswer, difficulty: input.difficulty, topic: input.topic }));
+  const rows = inputs.map((input) => ({ teacher_id: teacher.id, bank_id: bankId, content: input.content, options: input.options, correct_answer: input.correctAnswer }));
   const { error } = await getSupabaseBrowserClient().from("questions").insert(rows);
   if (error) throw friendlyError(error.message);
   return rows.length;
