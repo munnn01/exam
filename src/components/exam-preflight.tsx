@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Camera, Check, ChevronRight, Clock3, LockKeyhole, Maximize2, MonitorCheck, ShieldCheck, Video, Wifi, X } from "lucide-react";
+import { ArrowLeft, Camera, Check, ChevronRight, Clock3, LockKeyhole, Maximize2, MonitorCheck, MonitorUp, ShieldCheck, Video, Wifi, X } from "lucide-react";
 import { Brand } from "./brand";
 import type { ActiveExam, StudentCredential } from "@/lib/types";
 
@@ -9,18 +9,25 @@ interface ExamPreflightProps {
   student: StudentCredential;
   exam: ActiveExam;
   onBack: () => void;
-  onStart: () => void;
+  onStart: (screenStream: MediaStream) => void;
 }
 
 export function ExamPreflight({ student, exam, onBack, onStart }: ExamPreflightProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const screenStreamRef = useRef<MediaStream | null>(null);
+  const screenHandedOffRef = useRef(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState("");
+  const [screenReady, setScreenReady] = useState(false);
+  const [screenError, setScreenError] = useState("");
   const [starting, setStarting] = useState(false);
   const [agreed, setAgreed] = useState(true);
 
-  useEffect(() => () => streamRef.current?.getTracks().forEach((track) => track.stop()), []);
+  useEffect(() => () => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    if (!screenHandedOffRef.current) screenStreamRef.current?.getTracks().forEach((track) => track.stop());
+  }, []);
 
   const checkCamera = async () => {
     setCameraError("");
@@ -39,14 +46,44 @@ export function ExamPreflight({ student, exam, onBack, onStart }: ExamPreflightP
     }
   };
 
+  const checkScreenShare = async () => {
+    setScreenError("");
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      const track = stream.getVideoTracks()[0];
+      const surface = track?.getSettings().displaySurface;
+      if (!track || surface !== "monitor") {
+        stream.getTracks().forEach((item) => item.stop());
+        setScreenReady(false);
+        setScreenError("Hãy chọn Toàn bộ màn hình (Entire screen), không chọn một tab hoặc cửa sổ riêng.");
+        return;
+      }
+
+      const previousStream = screenStreamRef.current;
+      screenStreamRef.current = stream;
+      previousStream?.getTracks().forEach((item) => item.stop());
+      track.addEventListener("ended", () => {
+        if (screenHandedOffRef.current || screenStreamRef.current !== stream) return;
+        setScreenReady(false);
+        setScreenError("Chia sẻ màn hình đã dừng. Hãy chia sẻ lại Toàn bộ màn hình.");
+      });
+      setScreenReady(true);
+    } catch {
+      setScreenReady(false);
+      setScreenError("Chưa thể chia sẻ màn hình. Hãy chọn Cho phép và chia sẻ Toàn bộ màn hình.");
+    }
+  };
+
   const startExam = async () => {
-    if (!cameraReady || !agreed) return;
+    const screenStream = screenStreamRef.current;
+    if (!cameraReady || !screenReady || !screenStream || !agreed) return;
     setStarting(true);
     try {
       if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
-      onStart();
+      screenHandedOffRef.current = true;
+      onStart(screenStream);
     } catch {
       setCameraError("Trình duyệt chưa cho phép toàn màn hình. Hãy thử lại và chọn Cho phép.");
       setStarting(false);
@@ -76,7 +113,7 @@ export function ExamPreflight({ student, exam, onBack, onStart }: ExamPreflightP
             <div className="grid gap-4 p-5 sm:grid-cols-2">
               <Info icon={Clock3} label="Thời lượng" value={`${exam.durationMinutes} phút`} />
               <Info icon={LockKeyhole} label="Mã kỳ thi" value={exam.code} />
-              <Info icon={Video} label="Giám sát" value="Camera + trình duyệt" />
+              <Info icon={Video} label="Giám sát" value="Camera + toàn màn hình" />
               <Info icon={Wifi} label="Kết nối" value={navigator.onLine ? "Đang trực tuyến" : "Ngoại tuyến"} />
             </div>
             <div className="border-t border-slate-100 px-5 py-4">
@@ -92,8 +129,8 @@ export function ExamPreflight({ student, exam, onBack, onStart }: ExamPreflightP
 
         <section className="panel p-5 md:p-7">
           <div className="flex items-start justify-between gap-4">
-            <div><div className="text-xs font-bold text-teal-700">Bước 1/2</div><h2 className="mt-1 text-2xl font-bold tracking-[-.04em]">Kiểm tra camera</h2></div>
-            <div className={`ready-pill ${cameraReady ? "ready" : ""}`}>{cameraReady ? <><Check className="h-3.5 w-3.5" /> Đã sẵn sàng</> : "Chưa kiểm tra"}</div>
+            <div><div className="text-xs font-bold text-teal-700">Thiết lập bắt buộc</div><h2 className="mt-1 text-2xl font-bold tracking-[-.04em]">Camera và chia sẻ màn hình</h2></div>
+            <div className={`ready-pill ${cameraReady && screenReady ? "ready" : ""}`}>{cameraReady && screenReady ? <><Check className="h-3.5 w-3.5" /> Đã sẵn sàng</> : "Chưa hoàn tất"}</div>
           </div>
 
           <div className="camera-check mt-5">
@@ -106,19 +143,22 @@ export function ExamPreflight({ student, exam, onBack, onStart }: ExamPreflightP
           <button className="secondary-button mt-4 w-full justify-center" onClick={checkCamera}><Camera className="h-4 w-4" /> {cameraReady ? "Kiểm tra lại camera" : "Bật và kiểm tra camera"}</button>
           {cameraError && <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-medium leading-5 text-rose-700">{cameraError}</div>}
 
+          <button className="secondary-button mt-3 w-full justify-center" onClick={checkScreenShare}><MonitorUp className="h-4 w-4" /> {screenReady ? "Chia sẻ lại màn hình" : "Chia sẻ Toàn bộ màn hình"}</button>
+          {screenError && <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-medium leading-5 text-rose-700">{screenError}</div>}
+
           <div className="my-6 h-px bg-slate-100" />
           <div className="grid gap-3 sm:grid-cols-3">
-            <CheckItem icon={MonitorCheck} title="Trình duyệt" value="Tương thích" ok />
+            <CheckItem icon={MonitorCheck} title="Chia sẻ màn hình" value={screenReady ? "Đang hoạt động" : "Cần bật"} ok={screenReady} />
             <CheckItem icon={Maximize2} title="Toàn màn hình" value="Khi bắt đầu" ok />
             <CheckItem icon={Camera} title="Camera" value={cameraReady ? "Sẵn sàng" : "Cần kiểm tra"} ok={cameraReady} />
           </div>
 
           <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-xl bg-slate-50 p-4">
             <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5 h-4 w-4 accent-teal-700" />
-            <span className="text-xs leading-5 text-slate-600">Tôi hiểu hệ thống sẽ ghi nhận rời tab, copy-paste và các tín hiệu bất thường từ camera trong thời gian làm bài.</span>
+            <span className="text-xs leading-5 text-slate-600">Tôi đồng ý bật camera, chia sẻ Toàn bộ màn hình và để hệ thống ghi nhận các tín hiệu giám sát trong thời gian làm bài.</span>
           </label>
 
-          <button className="primary-button mt-5 w-full" disabled={!cameraReady || !agreed || starting} onClick={startExam}>
+          <button className="primary-button mt-5 w-full" disabled={!cameraReady || !screenReady || !agreed || starting} onClick={startExam}>
             {starting ? "Đang vào phòng thi..." : "Bắt đầu làm bài"}<ChevronRight className="h-4 w-4" />
           </button>
         </section>

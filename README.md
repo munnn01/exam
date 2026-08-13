@@ -9,7 +9,7 @@ Website thi trực tuyến nhiều giảng viên, có ngân hàng câu hỏi ri�
 
 ## Tính năng
 
-- Dashboard giảng viên, cấp/đổi mật khẩu, xuất danh sách CSV và xem nhật ký vi phạm.
+- Dashboard giảng viên, cấp/đổi mật khẩu, xuất danh sách CSV và xem nhật ký giám sát riêng theo từng giảng viên.
 - Quản trị viên cấp tài khoản giảng viên trực tiếp trong Supabase Auth; website chỉ cho đăng nhập và không gửi email xác nhận.
 - Tạo nhiều ngân hàng câu hỏi, nhập CSV, thêm/xóa câu và sinh đề ngẫu nhiên có snapshot.
 - Mỗi giảng viên tự cấp, đổi hoặc xóa tài khoản sinh viên gồm mã sinh viên, họ tên và mật khẩu đăng nhập.
@@ -20,7 +20,9 @@ Website thi trực tuyến nhiều giảng viên, có ngân hàng câu hỏi ri�
 - Phòng thi 45 phút với 10 câu hỏi, lưu đáp án, đánh dấu câu và nộp bài.
 - Ghi nhận rời tab, mất fullscreen, copy/cut/paste và mở menu chuột phải.
 - Phát hiện không thấy mặt, nhiều khuôn mặt, nhìn lệch kéo dài và điện thoại bằng MediaPipe chạy ngay trong trình duyệt.
-- Không xác minh danh tính và không thu âm.
+- Bắt buộc chia sẻ Toàn bộ màn hình; ghi nhận cảnh báo mức cao nếu dừng chia sẻ trong lúc thi.
+- Sinh viên chỉ thấy camera/chia sẻ màn hình đang hoạt động hay bị lỗi; chi tiết phát hiện chỉ hiện trong dashboard của giảng viên sở hữu đề.
+- Không xác minh danh tính, không thu âm và không lưu video màn hình.
 
 ## Chạy local
 

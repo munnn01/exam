@@ -11,7 +11,8 @@ export type ViolationType =
   | "MULTIPLE_FACES"
   | "LOOK_AWAY"
   | "PHONE_DETECTED"
-  | "CAMERA_OFF";
+  | "CAMERA_OFF"
+  | "SCREEN_SHARE_STOPPED";
 
 export type Severity = "low" | "medium" | "high";
 

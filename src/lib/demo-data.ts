@@ -130,4 +130,5 @@ export const VIOLATION_LABELS: Record<string, string> = {
   LOOK_AWAY: "Nhìn lệch",
   PHONE_DETECTED: "Phát hiện điện thoại",
   CAMERA_OFF: "Camera bị tắt",
+  SCREEN_SHARE_STOPPED: "Dừng chia sẻ màn hình",
 };

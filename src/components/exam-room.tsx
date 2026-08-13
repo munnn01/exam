@@ -1,45 +1,46 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  AlertTriangle,
   Camera,
   Check,
   ChevronLeft,
   ChevronRight,
-  CircleDot,
   Clock3,
   Flag,
-  Maximize2,
   Menu,
-  ScanFace,
+  MonitorUp,
   ShieldCheck,
   X,
 } from "lucide-react";
 import { Brand } from "./brand";
-import { VIOLATION_LABELS } from "@/lib/demo-data";
-import { appendEvent } from "@/lib/store";
+import { recordProctorEvent } from "@/lib/proctor-event-store";
 import type { ActiveExam, ProctorEvent, StudentCredential } from "@/lib/types";
 import { useProctoring } from "@/hooks/use-proctoring";
 
 interface ExamRoomProps {
   student: StudentCredential;
   exam: ActiveExam;
-  onFinish: (result: { score: number | null; total: number; violations: number; answers: Record<number, number> }) => void;
+  screenStream: MediaStream;
+  onFinish: (result: { score: number | null; total: number; answers: Record<number, number> }) => void;
 }
 
-export function ExamRoom({ student, exam, onFinish }: ExamRoomProps) {
+export function ExamRoom({ student, exam, screenStream, onFinish }: ExamRoomProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const screenStreamRef = useRef<MediaStream | null>(screenStream);
+  const finishingRef = useRef(false);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [flagged, setFlagged] = useState<number[]>([]);
   const [remaining, setRemaining] = useState(exam.durationMinutes * 60);
-  const [violations, setViolations] = useState<ProctorEvent[]>([]);
-  const [toast, setToast] = useState<ProctorEvent | null>(null);
+  const [sharedStream, setSharedStream] = useState<MediaStream | null>(screenStream);
+  const [screenActive, setScreenActive] = useState(screenStream.getVideoTracks().some((track) => track.readyState === "live"));
+  const [screenError, setScreenError] = useState("");
   const [finishing, setFinishing] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
 
   const handleViolation = useCallback((input: Omit<ProctorEvent, "id" | "occurredAt" | "studentId" | "studentName" | "examCode">) => {
+    if (finishingRef.current) return;
     const event: ProctorEvent = {
       ...input,
       id: crypto.randomUUID(),
@@ -48,22 +49,64 @@ export function ExamRoom({ student, exam, onFinish }: ExamRoomProps) {
       studentName: student.name,
       examCode: student.examCode,
     };
-    appendEvent(event);
-    setViolations((current) => [event, ...current]);
-    setToast(event);
-    setTimeout(() => setToast((current) => current?.id === event.id ? null : current), 4500);
-  }, [student]);
+    void recordProctorEvent(student, exam.id, event).catch((cause) => console.error("Không thể lưu sự kiện giám sát", cause));
+  }, [exam.id, student]);
 
   const monitor = useProctoring({ enabled: !finishing, videoRef, onViolation: handleViolation });
 
+  useEffect(() => {
+    screenStreamRef.current = sharedStream;
+    const track = sharedStream?.getVideoTracks()[0];
+    if (!track || track.readyState !== "live") return;
+
+    const onEnded = () => {
+      if (finishingRef.current) return;
+      setScreenActive(false);
+      setScreenError("Chia sẻ màn hình đã dừng. Hãy chia sẻ lại Toàn bộ màn hình.");
+      handleViolation({
+        type: "SCREEN_SHARE_STOPPED",
+        severity: "high",
+        detail: "Sinh viên đã dừng chia sẻ toàn bộ màn hình trong lúc làm bài",
+      });
+    };
+    track.addEventListener("ended", onEnded);
+    return () => track.removeEventListener("ended", onEnded);
+  }, [handleViolation, sharedStream]);
+
+  useEffect(() => () => {
+    screenStreamRef.current?.getTracks().forEach((track) => track.stop());
+  }, []);
+
+  const requestScreenShare = async () => {
+    setScreenError("");
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      const track = stream.getVideoTracks()[0];
+      const surface = track?.getSettings().displaySurface;
+      if (!track || surface !== "monitor") {
+        stream.getTracks().forEach((item) => item.stop());
+        setScreenActive(false);
+        setScreenError("Hãy chọn Toàn bộ màn hình (Entire screen), không chọn tab hoặc cửa sổ riêng.");
+        return;
+      }
+      setSharedStream(stream);
+      setScreenActive(true);
+    } catch {
+      setScreenActive(false);
+      setScreenError("Chưa thể chia sẻ màn hình. Hãy chọn Cho phép và chia sẻ Toàn bộ màn hình.");
+    }
+  };
+
   const finish = useCallback(async () => {
     if (finishing) return;
+    finishingRef.current = true;
     setFinishing(true);
     const canGradeLocally = exam.questions.every((question) => typeof question.answer === "number");
     const score = canGradeLocally ? exam.questions.reduce((sum, question) => sum + (answers[question.id] === question.answer ? 1 : 0), 0) : null;
+    screenStreamRef.current?.getTracks().forEach((track) => track.stop());
     if (document.fullscreenElement) await document.exitFullscreen().catch(() => undefined);
-    onFinish({ score, total: exam.questions.length, violations: violations.length, answers });
-  }, [answers, exam.questions, finishing, onFinish, violations.length]);
+    onFinish({ score, total: exam.questions.length, answers });
+  }, [answers, exam.questions, finishing, onFinish]);
 
   useEffect(() => {
     const timer = setInterval(() => setRemaining((current) => {
@@ -80,11 +123,11 @@ export function ExamRoom({ student, exam, onFinish }: ExamRoomProps) {
   const seconds = (remaining % 60).toString().padStart(2, "0");
   const progress = Math.round((answeredCount / exam.questions.length) * 100);
 
-  const statusItems = useMemo(() => [
-    { label: "Camera", ok: monitor.camera === "active", icon: Camera },
-    { label: "AI giám sát", ok: monitor.ai === "active", icon: ScanFace },
-    { label: "Toàn màn hình", ok: Boolean(document.fullscreenElement), icon: Maximize2 },
-  ], [monitor.ai, monitor.camera]);
+  const cameraMessage = monitor.camera === "active"
+    ? "Camera đang hoạt động"
+    : monitor.camera === "starting"
+      ? "Đang mở camera"
+      : "Camera bị lỗi";
 
   return (
     <main className="exam-shell min-h-screen bg-[#eef2f3]">
@@ -139,33 +182,29 @@ export function ExamRoom({ student, exam, onFinish }: ExamRoomProps) {
 
         <aside className="space-y-4">
           <div className="monitor-card">
-            <div className="flex items-center justify-between p-4"><div><div className="text-xs font-bold">Camera giám sát</div><div className="mt-1 text-[10px] text-slate-500">Không nhận diện danh tính</div></div><span className={`monitor-live ${monitor.camera === "active" ? "active" : ""}`}><span /> {monitor.camera === "active" ? "Trực tiếp" : "Đang mở"}</span></div>
+            <div className="flex items-center justify-between p-4"><div><div className="text-xs font-bold">Trạng thái camera</div><div className="mt-1 text-[10px] text-slate-500">Không nhận diện danh tính</div></div><span className={`monitor-live ${monitor.camera === "active" ? "active" : ""}`}><span /> {monitor.camera === "active" ? "Hoạt động" : "Kiểm tra"}</span></div>
             <div className="relative aspect-[4/3] overflow-hidden bg-slate-950">
               <video ref={videoRef} muted playsInline className="h-full w-full scale-x-[-1] object-cover" />
               <div className="face-corners"><i /><i /><i /><i /></div>
-              <div className="absolute bottom-3 left-3 rounded-full bg-slate-950/65 px-2.5 py-1.5 text-[9px] font-bold text-white backdrop-blur">{monitor.detail}</div>
+              <div className="absolute bottom-3 left-3 rounded-full bg-slate-950/65 px-2.5 py-1.5 text-[9px] font-bold text-white backdrop-blur">{cameraMessage}</div>
             </div>
-            <div className="grid grid-cols-3 border-t border-slate-100">
-              {statusItems.map((item) => { const Icon = item.icon; return <div className="border-r border-slate-100 p-3 text-center last:border-0" key={item.label}><Icon className={`mx-auto h-4 w-4 ${item.ok ? "text-emerald-600" : "text-amber-500"}`} /><div className="mt-1.5 text-[9px] font-semibold text-slate-500">{item.label}</div></div>; })}
+            <div className="grid grid-cols-2 border-t border-slate-100">
+              <DeviceStatus icon={Camera} label="Camera" ok={monitor.camera === "active"} />
+              <DeviceStatus icon={MonitorUp} label="Chia sẻ màn hình" ok={screenActive} />
             </div>
           </div>
 
           <div className="panel p-4">
-            <div className="flex items-center justify-between"><h3 className="text-xs font-bold">Trạng thái phiên thi</h3><ShieldCheck className="h-4 w-4 text-teal-700" /></div>
-            <div className="mt-4 space-y-3">
-              <MonitorLine label="Khuôn mặt" value={monitor.faceCount === 1 ? "Bình thường" : monitor.faceCount > 1 ? `${monitor.faceCount} khuôn mặt` : "Chưa thấy"} ok={monitor.faceCount === 1} />
-              <MonitorLine label="Hướng nhìn" value={monitor.gaze === "center" ? "Tập trung" : monitor.gaze === "away" ? "Đang lệch" : "Đang kiểm tra"} ok={monitor.gaze === "center"} />
-              <MonitorLine label="Điện thoại" value={monitor.phoneDetected ? "Có thể phát hiện" : "Không phát hiện"} ok={!monitor.phoneDetected} />
+            <div className="flex items-center justify-between"><h3 className="text-xs font-bold">Thiết bị giám sát</h3><ShieldCheck className="h-4 w-4 text-teal-700" /></div>
+            <div className="mt-4 space-y-3 text-xs leading-5 text-slate-600">
+              <p>Camera: <strong className={monitor.camera === "active" ? "text-emerald-700" : "text-rose-700"}>{cameraMessage}</strong></p>
+              <p>Chia sẻ màn hình: <strong className={screenActive ? "text-emerald-700" : "text-rose-700"}>{screenActive ? "Đang hoạt động" : "Bị gián đoạn"}</strong></p>
+              {!screenActive && <button className="secondary-button mt-1 w-full justify-center" onClick={requestScreenShare}><MonitorUp className="h-4 w-4" /> Chia sẻ lại màn hình</button>}
+              {screenError && <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-[11px] font-medium leading-5 text-rose-700">{screenError}</div>}
             </div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <div className="flex items-center gap-3"><div className={`grid h-9 w-9 place-items-center rounded-xl ${violations.length ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>{violations.length ? <AlertTriangle className="h-4 w-4" /> : <Check className="h-4 w-4" />}</div><div><div className="text-xs font-bold">{violations.length} sự kiện</div><div className="mt-1 text-[10px] text-slate-500">Được ghi nhận trong phiên này</div></div></div>
           </div>
         </aside>
       </div>
-
-      {toast && <div className={`violation-toast ${toast.severity}`}><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/80"><AlertTriangle className="h-5 w-5" /></div><div className="min-w-0 flex-1"><div className="text-xs font-bold">{VIOLATION_LABELS[toast.type]}</div><div className="mt-1 text-[11px] leading-4 opacity-80">{toast.detail}</div></div><button onClick={() => setToast(null)}><X className="h-4 w-4" /></button></div>}
     </main>
   );
 }
@@ -174,6 +213,6 @@ function Legend({ color, label }: { color: string; label: string }) {
   return <div className="flex items-center gap-2"><span className={`h-3 w-3 rounded ${color}`} /> {label}</div>;
 }
 
-function MonitorLine({ label, value, ok }: { label: string; value: string; ok: boolean }) {
-  return <div className="flex items-center justify-between gap-3 text-[11px]"><span className="text-slate-500">{label}</span><span className={`flex items-center gap-1.5 font-bold ${ok ? "text-emerald-700" : "text-amber-700"}`}><CircleDot className="h-3 w-3" /> {value}</span></div>;
+function DeviceStatus({ icon: Icon, label, ok }: { icon: typeof Camera; label: string; ok: boolean }) {
+  return <div className="border-r border-slate-100 p-3 text-center last:border-0"><Icon className={`mx-auto h-4 w-4 ${ok ? "text-emerald-600" : "text-rose-500"}`} /><div className="mt-1.5 text-[9px] font-semibold text-slate-500">{label}</div></div>;
 }

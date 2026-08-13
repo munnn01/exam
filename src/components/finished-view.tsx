@@ -7,7 +7,7 @@ import type { ActiveExam, StudentCredential } from "@/lib/types";
 interface FinishedViewProps {
   student: StudentCredential;
   exam: ActiveExam;
-  result: { score: number | null; total: number; violations: number };
+  result: { score: number | null; total: number };
   onHome: () => void;
 }
 
@@ -24,14 +24,13 @@ export function FinishedView({ student, exam, result, onHome }: FinishedViewProp
             <p className="mt-2 text-sm text-teal-100">Cảm ơn {student.name}. Câu trả lời của bạn đã được ghi nhận.</p>
           </div>
           <div className="p-6 md:p-9">
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <ResultCard label={result.score === null ? "Kết quả" : "Điểm demo"} value={result.score === null ? "Đã ghi nhận" : `${result.score}/${result.total}`} note={percent === null ? "Chờ hệ thống chấm bài" : `${percent}% câu đúng`} />
-              <ResultCard label="Sự kiện giám sát" value={String(result.violations)} note="Chờ giảng viên xem" />
               <ResultCard label="Trạng thái" value="Hoàn tất" note="Đã khóa bài làm" />
             </div>
             <div className="mt-6 flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left">
               <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-teal-700" />
-              <p className="text-xs leading-5 text-slate-600">Sự kiện camera và trình duyệt chỉ là tín hiệu hỗ trợ. Giảng viên sẽ xem lại ngữ cảnh trước khi đưa ra bất kỳ kết luận nào.</p>
+              <p className="text-xs leading-5 text-slate-600">Bài làm đã được ghi nhận. Nhật ký giám sát chỉ được cung cấp cho giảng viên phụ trách để xem xét.</p>
             </div>
             <button className="primary-button mx-auto mt-7" onClick={onHome}><Home className="h-4 w-4" /> Về danh sách đề</button>
           </div>

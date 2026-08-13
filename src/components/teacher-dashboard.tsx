@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -17,6 +17,7 @@ import {
   MonitorUp,
   Plus,
   Radio,
+  RefreshCw,
   Search,
   Settings,
   ShieldAlert,
@@ -30,12 +31,12 @@ import { ExamFileManager } from "./exam-file-manager";
 import { QuestionBankManager } from "./question-bank-manager";
 import { VIOLATION_LABELS } from "@/lib/demo-data";
 import { formatTime, makePassword } from "@/lib/store";
+import { listTeacherProctorEvents } from "@/lib/proctor-event-store";
 import { createStudentAccount, deleteStudentAccount, listTeacherStudentAccounts, resetStudentAccountPassword } from "@/lib/student-account-store";
 import type { ProctorEvent, StudentCredential, TeacherIdentity, ViolationType } from "@/lib/types";
 
 interface TeacherDashboardProps {
   teacher: TeacherIdentity;
-  events: ProctorEvent[];
   onLogout: () => void;
 }
 
@@ -48,13 +49,16 @@ const navItems = [
   { id: "settings", label: "Cấu hình kỳ thi", icon: Settings },
 ] as const;
 
-export function TeacherDashboard({ teacher, events, onLogout }: TeacherDashboardProps) {
+export function TeacherDashboard({ teacher, onLogout }: TeacherDashboardProps) {
   const [section, setSection] = useState<(typeof navItems)[number]["id"]>("overview");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [students, setStudents] = useState<StudentCredential[]>([]);
   const [studentsLoading, setStudentsLoading] = useState(true);
   const [studentMessage, setStudentMessage] = useState<{ error: boolean; text: string } | null>(null);
+  const [events, setEvents] = useState<ProctorEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [eventsError, setEventsError] = useState("");
   const [query, setQuery] = useState("");
 
   const highRisk = events.filter((event) => event.severity === "high").length;
@@ -73,6 +77,18 @@ export function TeacherDashboard({ teacher, events, onLogout }: TeacherDashboard
     }
   };
 
+  const loadEvents = useCallback(async (silent = false) => {
+    if (!silent) setEventsLoading(true);
+    try {
+      setEvents(await listTeacherProctorEvents(teacher));
+      setEventsError("");
+    } catch (cause) {
+      setEventsError(cause instanceof Error ? cause.message : "Không tải được nhật ký giám sát.");
+    } finally {
+      if (!silent) setEventsLoading(false);
+    }
+  }, [teacher]);
+
   useEffect(() => {
     let cancelled = false;
     void listTeacherStudentAccounts(teacher)
@@ -81,6 +97,15 @@ export function TeacherDashboard({ teacher, events, onLogout }: TeacherDashboard
       .finally(() => { if (!cancelled) setStudentsLoading(false); });
     return () => { cancelled = true; };
   }, [teacher]);
+
+  useEffect(() => {
+    const firstLoad = window.setTimeout(() => void loadEvents(), 0);
+    const timer = window.setInterval(() => void loadEvents(true), 10_000);
+    return () => {
+      window.clearTimeout(firstLoad);
+      window.clearInterval(timer);
+    };
+  }, [loadEvents]);
 
   const exportCsv = () => {
     const header = "Ma sinh vien,Ho ten,Trang thai";
@@ -183,11 +208,15 @@ export function TeacherDashboard({ teacher, events, onLogout }: TeacherDashboard
 
           {section === "events" && (
             <section>
-              <PageHeading eyebrow="Bằng chứng theo thời gian" title="Nhật ký giám sát" copy="Các tín hiệu chỉ hỗ trợ xem xét; không tự động kết luận gian lận." />
-              <div className="relative mt-6 max-w-md">
-                <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
-                <input className="search-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm theo tên, mã hoặc loại sự kiện..." />
+              <PageHeading eyebrow="Riêng tư theo giảng viên" title="Nhật ký giám sát" copy="Chỉ tài khoản giảng viên sở hữu kỳ thi xem được các phát hiện camera, trình duyệt và trạng thái chia sẻ màn hình." />
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <div className="relative min-w-64 max-w-md flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                  <input className="search-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm theo tên, mã hoặc loại sự kiện..." />
+                </div>
+                <button className="secondary-button" disabled={eventsLoading} onClick={() => void loadEvents()}><RefreshCw className={`h-4 w-4 ${eventsLoading ? "animate-spin" : ""}`} /> Làm mới</button>
               </div>
+              {eventsError && <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">{eventsError}</div>}
               <EventTable events={filteredEvents} />
             </section>
           )}
@@ -205,7 +234,7 @@ function Overview({ teacher, events, students, highRisk, setSection }: { teacher
   const inProgress = students.filter((student) => student.status === "Đang thi").length;
   const cards = [
     { label: "Sinh viên", value: students.length, note: `${inProgress} đang làm bài`, icon: Users, color: "teal" },
-    { label: "Sự kiện hôm nay", value: events.length, note: "+2 trong 10 phút", icon: Activity, color: "blue" },
+    { label: "Sự kiện gần đây", value: events.length, note: "Tự động cập nhật", icon: Activity, color: "blue" },
     { label: "Cảnh báo cao", value: highRisk, note: "Cần xem xét", icon: AlertTriangle, color: "rose" },
     { label: "Hệ thống", value: "Ổn định", note: "AI phía thiết bị", icon: MonitorUp, color: "emerald" },
   ];
@@ -249,14 +278,14 @@ function EventTable({ events, compact = false }: { events: ProctorEvent[]; compa
   return (
     <div className="panel mt-4 overflow-hidden">
       {events.length === 0 ? <div className="grid min-h-64 place-items-center p-8 text-center"><div><CheckCircle2 className="mx-auto h-8 w-8 text-emerald-500" /><div className="mt-3 text-sm font-bold">Không có sự kiện phù hợp</div><div className="mt-1 text-xs text-slate-500">Các cảnh báo mới sẽ xuất hiện tại đây.</div></div></div> : (
-        <div className="overflow-x-auto"><table className={`data-table ${compact ? "min-w-[660px]" : "min-w-[820px]"}`}><thead><tr><th>Sinh viên</th><th>Sự kiện</th><th>Mức độ</th><th>Thời gian</th>{!compact && <th>Chi tiết</th>}</tr></thead><tbody>{events.map((event) => <tr key={event.id}><td><div className="font-bold text-slate-900">{event.studentName}</div><div className="mt-1 text-[11px] text-slate-500">{event.studentId}</div></td><td><div className="flex items-center gap-2"><EventIcon type={event.type} /><span className="text-xs font-semibold">{VIOLATION_LABELS[event.type]}</span></div></td><td><SeverityBadge severity={event.severity} /></td><td><div className="text-xs font-semibold text-slate-700">{formatTime(event.occurredAt)}</div><div className="mt-1 text-[10px] text-slate-400">Hôm nay</div></td>{!compact && <td className="max-w-[280px] text-xs leading-5 text-slate-500">{event.detail}</td>}</tr>)}</tbody></table></div>
+        <div className="overflow-x-auto"><table className={`data-table ${compact ? "min-w-[660px]" : "min-w-[820px]"}`}><thead><tr><th>Sinh viên</th><th>Sự kiện</th><th>Mức độ</th><th>Thời gian</th>{!compact && <th>Chi tiết</th>}</tr></thead><tbody>{events.map((event) => <tr key={event.id}><td><div className="font-bold text-slate-900">{event.studentName}</div><div className="mt-1 text-[11px] text-slate-500">{event.studentId} · {event.examCode}</div></td><td><div className="flex items-center gap-2"><EventIcon type={event.type} /><span className="text-xs font-semibold">{VIOLATION_LABELS[event.type]}</span></div></td><td><SeverityBadge severity={event.severity} /></td><td><div className="text-xs font-semibold text-slate-700">{formatTime(event.occurredAt)}</div><div className="mt-1 text-[10px] text-slate-400">{new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(event.occurredAt))}</div></td>{!compact && <td className="max-w-[280px] text-xs leading-5 text-slate-500">{event.detail}</td>}</tr>)}</tbody></table></div>
       )}
     </div>
   );
 }
 
 function EventIcon({ type }: { type: ViolationType }) {
-  const Icon = type === "PHONE_DETECTED" ? Smartphone : type === "TAB_HIDDEN" || type === "EXIT_FULLSCREEN" ? MonitorUp : type.includes("COPY") || type.includes("PASTE") ? ClipboardList : ShieldAlert;
+  const Icon = type === "PHONE_DETECTED" ? Smartphone : type === "TAB_HIDDEN" || type === "EXIT_FULLSCREEN" || type === "SCREEN_SHARE_STOPPED" ? MonitorUp : type.includes("COPY") || type.includes("PASTE") ? ClipboardList : ShieldAlert;
   return <span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 text-slate-600"><Icon className="h-4 w-4" /></span>;
 }
 
@@ -287,6 +316,7 @@ function ExamSettings() {
     ["Người thứ hai", "Sau 1,1 giây", true],
     ["Nhìn lệch", "Sau 2,6 giây", true],
     ["Điện thoại", "Độ tin cậy từ 48%", true],
+    ["Chia sẻ toàn màn hình", "Bắt buộc trong suốt bài thi", true],
   ], []);
-  return <section><PageHeading eyebrow="Chính sách giám sát" title="Cấu hình kỳ thi" copy="Ngưỡng hiện tại ưu tiên giảm cảnh báo nhầm. Có thể hiệu chỉnh sau khi thử với camera thực tế." /><div className="mt-7 grid gap-6 xl:grid-cols-[1.15fr_.85fr]"><div className="panel divide-y divide-slate-100 px-5">{settings.map(([title, copy]) => <div key={String(title)} className="flex items-center gap-4 py-5"><div className="grid h-10 w-10 place-items-center rounded-xl bg-teal-50 text-teal-700"><CheckCircle2 className="h-5 w-5" /></div><div className="flex-1"><div className="text-sm font-bold">{title}</div><div className="mt-1 text-xs text-slate-500">{copy}</div></div><div className="toggle active"><span /></div></div>)}</div><div className="panel p-6"><div className="grid h-12 w-12 place-items-center rounded-2xl bg-amber-50 text-amber-700"><AlertTriangle className="h-6 w-6" /></div><h3 className="mt-5 text-lg font-bold">Nguyên tắc ra quyết định</h3><p className="mt-3 text-sm leading-6 text-slate-500">Một tín hiệu AI không đồng nghĩa với gian lận. Hệ thống lưu thời gian, độ tin cậy và ảnh bằng chứng để giảng viên xem xét trong đúng ngữ cảnh.</p><div className="mt-5 rounded-xl bg-slate-50 p-4 text-xs leading-5 text-slate-600">Không thu âm, không xác minh danh tính và không đọc nội dung clipboard.</div></div></div></section>;
+  return <section><PageHeading eyebrow="Chính sách giám sát" title="Cấu hình kỳ thi" copy="Ngưỡng hiện tại ưu tiên giảm cảnh báo nhầm. Có thể hiệu chỉnh sau khi thử với camera thực tế." /><div className="mt-7 grid gap-6 xl:grid-cols-[1.15fr_.85fr]"><div className="panel divide-y divide-slate-100 px-5">{settings.map(([title, copy]) => <div key={String(title)} className="flex items-center gap-4 py-5"><div className="grid h-10 w-10 place-items-center rounded-xl bg-teal-50 text-teal-700"><CheckCircle2 className="h-5 w-5" /></div><div className="flex-1"><div className="text-sm font-bold">{title}</div><div className="mt-1 text-xs text-slate-500">{copy}</div></div><div className="toggle active"><span /></div></div>)}</div><div className="panel p-6"><div className="grid h-12 w-12 place-items-center rounded-2xl bg-amber-50 text-amber-700"><AlertTriangle className="h-6 w-6" /></div><h3 className="mt-5 text-lg font-bold">Nguyên tắc ra quyết định</h3><p className="mt-3 text-sm leading-6 text-slate-500">Một tín hiệu AI không đồng nghĩa với gian lận. Hệ thống lưu thời gian, độ tin cậy và mô tả sự kiện để giảng viên xem xét trong đúng ngữ cảnh.</p><div className="mt-5 rounded-xl bg-slate-50 p-4 text-xs leading-5 text-slate-600">Không thu âm, không xác minh danh tính, không đọc nội dung clipboard và không lưu video màn hình.</div></div></div></section>;
 }
