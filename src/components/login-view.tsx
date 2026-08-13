@@ -4,7 +4,6 @@ import { useState } from "react";
 import { ArrowRight, Eye, EyeOff, GraduationCap, LockKeyhole, ShieldCheck, UserRound } from "lucide-react";
 import { Brand } from "./brand";
 import { DEMO_TEACHER } from "@/lib/demo-data";
-import { findStudent } from "@/lib/store";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { signInTeacher } from "@/lib/teacher-auth";
 import type { StudentCredential, TeacherIdentity } from "@/lib/types";
@@ -20,7 +19,7 @@ export function LoginView({ onTeacherLogin, onStudentLogin }: LoginViewProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [studentId, setStudentId] = useState("SV001");
+  const [studentId, setStudentId] = useState(cloudReady ? "" : "SV001");
   const [teacherForm, setTeacherForm] = useState(() => ({
     email: cloudReady ? "" : DEMO_TEACHER.email,
     password: cloudReady ? "" : DEMO_TEACHER.password,
@@ -40,9 +39,15 @@ export function LoginView({ onTeacherLogin, onStudentLogin }: LoginViewProps) {
         onTeacherLogin(await signInTeacher(teacherForm.email, teacherForm.password));
         return;
       }
-      const student = findStudent(studentId);
-      if (student) onStudentLogin(student);
-      else setError("Không tìm thấy mã sinh viên. Vui lòng kiểm tra lại.");
+      const normalizedStudentId = studentId.trim().toUpperCase();
+      if (normalizedStudentId.length < 2) throw new Error("Vui lòng nhập mã sinh viên hợp lệ.");
+      onStudentLogin({
+        id: normalizedStudentId,
+        name: normalizedStudentId,
+        password: "",
+        examCode: "",
+        status: "Chưa thi",
+      });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Đã xảy ra lỗi. Vui lòng thử lại.");
     } finally {
@@ -88,7 +93,7 @@ export function LoginView({ onTeacherLogin, onStudentLogin }: LoginViewProps) {
             <form className="mt-6 space-y-4" onSubmit={(event) => void submit(event)}>
               {role === "student" ? <>
                 <Field label="Mã sinh viên"><input value={studentId} onChange={(e) => setStudentId(e.target.value)} placeholder="Nhập mã sinh viên" /></Field>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-600">Sau khi tiếp tục, bạn sẽ thấy danh sách file đề đang mở và đã khóa. Chọn đề đang mở rồi nhập mật khẩu do giảng viên cung cấp.</div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-600">Sinh viên không cần tài khoản riêng. Nhập mã sinh viên, chọn đề đang mở rồi dùng mật khẩu do giảng viên cung cấp.</div>
               </> : <>
                 <Field label="Email giảng viên"><input type="email" required value={teacherForm.email} onChange={(e) => setTeacherForm({ ...teacherForm, email: e.target.value })} /></Field>
                 <Field label="Mật khẩu"><PasswordInput value={teacherForm.password} show={showPassword} onShow={() => setShowPassword(!showPassword)} onChange={(password) => setTeacherForm({ ...teacherForm, password })} /></Field>

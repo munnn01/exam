@@ -12,7 +12,7 @@ Website thi trực tuyến nhiều giảng viên, có ngân hàng câu hỏi ri�
 - Dashboard giảng viên, cấp/đổi mật khẩu, xuất danh sách CSV và xem nhật ký vi phạm.
 - Quản trị viên cấp tài khoản giảng viên trực tiếp trong Supabase Auth; website chỉ cho đăng nhập và không gửi email xác nhận.
 - Tạo nhiều ngân hàng câu hỏi, nhập CSV, thêm/xóa câu và sinh đề ngẫu nhiên có snapshot.
-- Sinh viên đăng nhập bằng mã sinh viên, xem danh sách đề đang mở/đã khóa và nhập mật khẩu riêng của file đề.
+- Sinh viên không cần tài khoản: nhập mã sinh viên bất kỳ, xem danh sách đề đang mở/đã khóa và nhập mật khẩu riêng của file đề.
 - Giảng viên tự đặt mật khẩu cho từng file đề và gửi mật khẩu đó cho sinh viên.
 - File đề có vòng đời nháp → mở → khóa → lưu trữ; chỉ nháp chưa có lượt làm được xóa.
 - Hiển thị dung lượng và tự chặn tạo file đề khi database gần đầy.
