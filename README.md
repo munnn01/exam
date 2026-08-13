@@ -10,9 +10,10 @@ Website thi trực tuyến nhiều giảng viên, có ngân hàng câu hỏi ri�
 ## Tính năng
 
 - Dashboard giảng viên, cấp/đổi mật khẩu, xuất danh sách CSV và xem nhật ký vi phạm.
-- Đăng ký/đăng nhập giảng viên với Supabase Auth; dữ liệu được tách bằng Row Level Security.
+- Quản trị viên cấp tài khoản giảng viên trực tiếp trong Supabase Auth; website chỉ cho đăng nhập và không gửi email xác nhận.
 - Tạo nhiều ngân hàng câu hỏi, nhập CSV, thêm/xóa câu và sinh đề ngẫu nhiên có snapshot.
 - Sinh viên đăng nhập bằng mã sinh viên, xem danh sách đề đang mở/đã khóa và nhập mật khẩu riêng của file đề.
+- Giảng viên tự đặt mật khẩu cho từng file đề và gửi mật khẩu đó cho sinh viên.
 - File đề có vòng đời nháp → mở → khóa → lưu trữ; chỉ nháp chưa có lượt làm được xóa.
 - Hiển thị dung lượng và tự chặn tạo file đề khi database gần đầy.
 - Phòng thi 45 phút với 10 câu hỏi, lưu đáp án, đánh dấu câu và nộp bài.
@@ -43,6 +44,8 @@ Khi chưa đặt biến Supabase, ứng dụng tự chạy ở chế độ demo 
 2. Sao chép `.env.example` thành `.env.local` và điền các biến môi trường.
 3. Chạy `pnpm db:migrate` để tạo bảng, trigger và chính sách RLS.
 4. Trong Supabase Auth, thêm `https://examguard-phi.vercel.app/**` vào Redirect URLs.
+
+Để cấp tài khoản giảng viên, vào **Supabase → Authentication → Users → Add user → Create new user**, nhập email/mật khẩu và bật **Auto Confirm User**. Website không mở đăng ký công khai.
 
 Tải file `mau-cau-hoi.csv` ngay cạnh nút **Nhập CSV**. File có 6 cột: `content`, `option_a`, `option_b`, `option_c`, `option_d`, `correct_answer`; đáp án đúng nhận `A`, `B`, `C`, `D` hoặc `1`, `2`, `3`, `4`. Khi chọn file hợp lệ, hệ thống tự động tạo toàn bộ câu hỏi và đáp án.
 

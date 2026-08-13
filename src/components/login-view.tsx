@@ -6,7 +6,7 @@ import { Brand } from "./brand";
 import { DEMO_TEACHER } from "@/lib/demo-data";
 import { findStudent } from "@/lib/store";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
-import { signInTeacher, signUpTeacher } from "@/lib/teacher-auth";
+import { signInTeacher } from "@/lib/teacher-auth";
 import type { StudentCredential, TeacherIdentity } from "@/lib/types";
 
 interface LoginViewProps {
@@ -15,43 +15,34 @@ interface LoginViewProps {
 }
 
 export function LoginView({ onTeacherLogin, onStudentLogin }: LoginViewProps) {
+  const cloudReady = isSupabaseConfigured();
   const [role, setRole] = useState<"student" | "teacher">("student");
-  const [teacherMode, setTeacherMode] = useState<"login" | "signup">("login");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
-  const cloudReady = isSupabaseConfigured();
   const [studentId, setStudentId] = useState("SV001");
-  const [teacherForm, setTeacherForm] = useState({ name: "", email: DEMO_TEACHER.email, password: DEMO_TEACHER.password });
+  const [teacherForm, setTeacherForm] = useState(() => ({
+    email: cloudReady ? "" : DEMO_TEACHER.email,
+    password: cloudReady ? "" : DEMO_TEACHER.password,
+  }));
 
   const changeRole = (nextRole: "student" | "teacher") => {
     setRole(nextRole);
     setError("");
-    setNotice("");
   };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError("");
-    setNotice("");
     setBusy(true);
     try {
       if (role === "teacher") {
-        if (teacherMode === "signup") {
-          if (teacherForm.name.trim().length < 2) throw new Error("Vui lòng nhập họ tên giảng viên.");
-          if (teacherForm.password.length < 8) throw new Error("Mật khẩu cần ít nhất 8 ký tự.");
-          const result = await signUpTeacher(teacherForm.name, teacherForm.email, teacherForm.password);
-          if (result.teacher) onTeacherLogin(result.teacher);
-          else if (result.confirmationRequired) setNotice("Đã tạo tài khoản. Hãy mở email xác nhận rồi đăng nhập.");
-          return;
-        }
         onTeacherLogin(await signInTeacher(teacherForm.email, teacherForm.password));
         return;
       }
       const student = findStudent(studentId);
       if (student) onStudentLogin(student);
-      else setError("Không tìm thấy mã dự thi phù hợp. Vui lòng kiểm tra lại.");
+      else setError("Không tìm thấy mã sinh viên. Vui lòng kiểm tra lại.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Đã xảy ra lỗi. Vui lòng thử lại.");
     } finally {
@@ -77,7 +68,7 @@ export function LoginView({ onTeacherLogin, onStudentLogin }: LoginViewProps) {
             Tập trung vào bài thi. <span className="text-teal-700">Mọi thứ khác để chúng tôi lo.</span>
           </h1>
           <p className="mt-7 max-w-lg text-base leading-7 text-slate-600 md:text-lg">
-            Mỗi giảng viên có ngân hàng câu hỏi riêng, tự tạo đề và nhập CSV hàng loạt — cùng hệ thống phát hiện rời tab, điện thoại và hành vi bất thường.
+            Mỗi giảng viên có ngân hàng câu hỏi riêng, tự tạo đề, đặt mật khẩu gửi sinh viên và nhập CSV hàng loạt — cùng hệ thống phát hiện hành vi bất thường.
           </p>
           <div className="mt-9 grid max-w-lg grid-cols-3 gap-3">
             {[["Tách biệt", "Dữ liệu theo giảng viên"], ["Nhanh", "Nhập câu hỏi từ CSV"], ["Linh hoạt", "Tạo đề ngẫu nhiên"]].map(([title, copy]) => (
@@ -88,7 +79,7 @@ export function LoginView({ onTeacherLogin, onStudentLogin }: LoginViewProps) {
 
         <section className="mx-auto w-full max-w-[480px]">
           <div className="login-card">
-            <div className="mb-7"><div className="text-sm font-semibold text-teal-700">Chào mừng trở lại</div><h2 className="mt-1 text-3xl font-bold tracking-[-.04em] text-slate-950">{role === "teacher" && teacherMode === "signup" ? "Tạo tài khoản giảng viên" : "Đăng nhập hệ thống"}</h2><p className="mt-2 text-sm text-slate-500">Chọn vai trò và nhập thông tin phù hợp.</p></div>
+            <div className="mb-7"><div className="text-sm font-semibold text-teal-700">Chào mừng trở lại</div><h2 className="mt-1 text-3xl font-bold tracking-[-.04em] text-slate-950">Đăng nhập hệ thống</h2><p className="mt-2 text-sm text-slate-500">Chọn vai trò và nhập thông tin phù hợp.</p></div>
             <div className="grid grid-cols-2 rounded-xl bg-slate-100 p-1">
               <button type="button" className={`role-tab ${role === "student" ? "active" : ""}`} onClick={() => changeRole("student")}><GraduationCap className="h-4 w-4" /> Sinh viên</button>
               <button type="button" className={`role-tab ${role === "teacher" ? "active" : ""}`} onClick={() => changeRole("teacher")}><UserRound className="h-4 w-4" /> Giảng viên</button>
@@ -97,21 +88,18 @@ export function LoginView({ onTeacherLogin, onStudentLogin }: LoginViewProps) {
             <form className="mt-6 space-y-4" onSubmit={(event) => void submit(event)}>
               {role === "student" ? <>
                 <Field label="Mã sinh viên"><input value={studentId} onChange={(e) => setStudentId(e.target.value)} placeholder="Nhập mã sinh viên" /></Field>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-600">Sau khi tiếp tục, bạn sẽ thấy danh sách file đề đang mở và đã khóa. Mật khẩu được nhập khi chọn một đề đang mở.</div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-600">Sau khi tiếp tục, bạn sẽ thấy danh sách file đề đang mở và đã khóa. Chọn đề đang mở rồi nhập mật khẩu do giảng viên cung cấp.</div>
               </> : <>
-                {teacherMode === "signup" && <Field label="Họ tên giảng viên"><input value={teacherForm.name} onChange={(e) => setTeacherForm({ ...teacherForm, name: e.target.value })} placeholder="Nguyễn Minh Anh" /></Field>}
                 <Field label="Email giảng viên"><input type="email" required value={teacherForm.email} onChange={(e) => setTeacherForm({ ...teacherForm, email: e.target.value })} /></Field>
                 <Field label="Mật khẩu"><PasswordInput value={teacherForm.password} show={showPassword} onShow={() => setShowPassword(!showPassword)} onChange={(password) => setTeacherForm({ ...teacherForm, password })} /></Field>
+                {cloudReady && <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-600">Tài khoản giảng viên do quản trị viên cấp trực tiếp trên Supabase. Website không tự đăng ký và không gửi email xác nhận.</div>}
               </>}
 
               {error && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{error}</div>}
-              {notice && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">{notice}</div>}
-              <button disabled={busy} className="primary-button w-full" type="submit">{busy ? "Đang xử lý..." : role === "student" ? "Xem danh sách đề" : teacherMode === "signup" ? "Tạo tài khoản" : "Mở bảng điều khiển"}<ArrowRight className="h-4 w-4" /></button>
+              <button disabled={busy} className="primary-button w-full" type="submit">{busy ? "Đang xử lý..." : role === "student" ? "Xem danh sách đề" : "Mở bảng điều khiển"}<ArrowRight className="h-4 w-4" /></button>
             </form>
 
-            {role === "teacher" && cloudReady && <button type="button" className="mt-4 w-full text-center text-xs font-bold text-teal-700" onClick={() => { setTeacherMode(teacherMode === "login" ? "signup" : "login"); setError(""); setNotice(""); }}>{teacherMode === "login" ? "Chưa có tài khoản? Đăng ký giảng viên" : "Đã có tài khoản? Đăng nhập"}</button>}
-
-            <div className="mt-6 flex items-start gap-3 rounded-xl border border-teal-100 bg-teal-50/70 p-3.5"><LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-teal-700" /><p className="text-[12px] leading-5 text-teal-900">{cloudReady ? <><strong>Tài khoản thật được bảo vệ bởi Supabase Auth.</strong> Mỗi giảng viên chỉ truy cập bộ câu hỏi của chính mình.</> : <><strong>Demo đã điền sẵn.</strong> Kết nối Supabase để bật đăng ký tài khoản và đồng bộ nhiều thiết bị.</>}</p></div>
+            <div className="mt-6 flex items-start gap-3 rounded-xl border border-teal-100 bg-teal-50/70 p-3.5"><LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-teal-700" /><p className="text-[12px] leading-5 text-teal-900">{cloudReady ? <><strong>Tài khoản được bảo vệ bởi Supabase Auth.</strong> Mỗi giảng viên chỉ truy cập ngân hàng câu hỏi và file đề của chính mình.</> : <><strong>Demo đã điền sẵn.</strong> Kết nối Supabase để dùng tài khoản do quản trị viên cấp và đồng bộ nhiều thiết bị.</>}</p></div>
           </div>
           <p className="mt-5 text-center text-[11px] leading-5 text-slate-500">Sinh viên đồng ý bật camera trong thời gian làm bài; hệ thống không xác minh danh tính.</p>
         </section>
