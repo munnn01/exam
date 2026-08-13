@@ -5,6 +5,7 @@ import {
   Activity,
   AlertTriangle,
   Bell,
+  BookOpenCheck,
   CheckCircle2,
   ClipboardList,
   Copy,
@@ -23,11 +24,13 @@ import {
   X,
 } from "lucide-react";
 import { Brand } from "./brand";
-import { DEMO_TEACHER, EXAM, VIOLATION_LABELS } from "@/lib/demo-data";
+import { QuestionBankManager } from "./question-bank-manager";
+import { EXAM, VIOLATION_LABELS } from "@/lib/demo-data";
 import { formatTime, makePassword, saveStudents } from "@/lib/store";
-import type { ProctorEvent, StudentCredential, ViolationType } from "@/lib/types";
+import type { ProctorEvent, StudentCredential, TeacherIdentity, ViolationType } from "@/lib/types";
 
 interface TeacherDashboardProps {
+  teacher: TeacherIdentity;
   events: ProctorEvent[];
   students: StudentCredential[];
   onStudentsChange: (students: StudentCredential[]) => void;
@@ -36,12 +39,13 @@ interface TeacherDashboardProps {
 
 const navItems = [
   { id: "overview", label: "Tổng quan", icon: LayoutDashboard },
+  { id: "questions", label: "Ngân hàng câu hỏi", icon: BookOpenCheck },
   { id: "students", label: "Sinh viên & mật khẩu", icon: Users },
   { id: "events", label: "Nhật ký giám sát", icon: ShieldAlert },
   { id: "settings", label: "Cấu hình kỳ thi", icon: Settings },
 ] as const;
 
-export function TeacherDashboard({ events, students, onStudentsChange, onLogout }: TeacherDashboardProps) {
+export function TeacherDashboard({ teacher, events, students, onStudentsChange, onLogout }: TeacherDashboardProps) {
   const [section, setSection] = useState<(typeof navItems)[number]["id"]>("overview");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showAddStudent, setShowAddStudent] = useState(false);
@@ -98,7 +102,7 @@ export function TeacherDashboard({ events, students, onStudentsChange, onLogout 
           <div className="mb-3 flex items-center gap-3 rounded-xl bg-slate-50 p-3">
             <div className="grid h-9 w-9 place-items-center rounded-full bg-teal-100 text-sm font-bold text-teal-800">MA</div>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-xs font-bold text-slate-900">{DEMO_TEACHER.name}</div>
+              <div className="truncate text-xs font-bold text-slate-900">{teacher.name}</div>
               <div className="truncate text-[10px] text-slate-500">Giảng viên</div>
             </div>
           </div>
@@ -125,8 +129,10 @@ export function TeacherDashboard({ events, students, onStudentsChange, onLogout 
 
         <main className="mx-auto max-w-[1440px] p-4 md:p-7 lg:p-8">
           {section === "overview" && (
-            <Overview events={events} students={students} highRisk={highRisk} setSection={setSection} />
+            <Overview teacher={teacher} events={events} students={students} highRisk={highRisk} setSection={setSection} />
           )}
+
+          {section === "questions" && <QuestionBankManager teacher={teacher} />}
 
           {section === "students" && (
             <section>
@@ -179,7 +185,7 @@ export function TeacherDashboard({ events, students, onStudentsChange, onLogout 
   );
 }
 
-function Overview({ events, students, highRisk, setSection }: { events: ProctorEvent[]; students: StudentCredential[]; highRisk: number; setSection: (section: "students" | "events") => void }) {
+function Overview({ teacher, events, students, highRisk, setSection }: { teacher: TeacherIdentity; events: ProctorEvent[]; students: StudentCredential[]; highRisk: number; setSection: (section: "students" | "events") => void }) {
   const inProgress = students.filter((student) => student.status === "Đang thi").length;
   const cards = [
     { label: "Sinh viên", value: students.length, note: `${inProgress} đang làm bài`, icon: Users, color: "teal" },
@@ -189,7 +195,7 @@ function Overview({ events, students, highRisk, setSection }: { events: ProctorE
   ];
   return (
     <section>
-      <PageHeading eyebrow="Tổng quan trực tiếp" title="Chào buổi chiều, thầy Minh Anh" copy="Theo dõi tình trạng kỳ thi và xử lý các tín hiệu cần chú ý." />
+      <PageHeading eyebrow="Tổng quan trực tiếp" title={`Xin chào, ${teacher.name}`} copy="Theo dõi tình trạng kỳ thi và quản lý kho câu hỏi riêng của bạn." />
       <div className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => {
           const Icon = card.icon;

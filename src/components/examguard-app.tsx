@@ -7,11 +7,13 @@ import { FinishedView } from "./finished-view";
 import { LoginView } from "./login-view";
 import { TeacherDashboard } from "./teacher-dashboard";
 import { getEvents, getStudents } from "@/lib/store";
-import type { AppView, ProctorEvent, StudentCredential } from "@/lib/types";
+import { getCurrentTeacher, signOutTeacher } from "@/lib/teacher-auth";
+import type { AppView, ProctorEvent, StudentCredential, TeacherIdentity } from "@/lib/types";
 
 export function ExamGuardApp() {
   const [view, setView] = useState<AppView>("login");
   const [student, setStudent] = useState<StudentCredential | null>(null);
+  const [teacher, setTeacher] = useState<TeacherIdentity | null>(null);
   const [students, setStudents] = useState<StudentCredential[]>([]);
   const [events, setEvents] = useState<ProctorEvent[]>([]);
   const [result, setResult] = useState({ score: 0, total: 0, violations: 0 });
@@ -21,6 +23,12 @@ export function ExamGuardApp() {
     const refreshStudents = () => setStudents(getStudents());
     refreshEvents();
     refreshStudents();
+    void getCurrentTeacher().then((current) => {
+      if (current) {
+        setTeacher(current);
+        setView("teacher");
+      }
+    });
     window.addEventListener("examguard:event", refreshEvents);
     window.addEventListener("examguard:students", refreshStudents);
     return () => {
@@ -29,10 +37,10 @@ export function ExamGuardApp() {
     };
   }, []);
 
-  if (view === "teacher") return <TeacherDashboard events={events} students={students} onStudentsChange={setStudents} onLogout={() => setView("login")} />;
+  if (view === "teacher" && teacher) return <TeacherDashboard teacher={teacher} events={events} students={students} onStudentsChange={setStudents} onLogout={() => { void signOutTeacher(); setTeacher(null); setView("login"); }} />;
   if (view === "preflight" && student) return <ExamPreflight student={student} onBack={() => setView("login")} onStart={() => setView("exam")} />;
   if (view === "exam" && student) return <ExamRoom student={student} onFinish={(nextResult) => { setResult(nextResult); setView("finished"); }} />;
   if (view === "finished" && student) return <FinishedView student={student} result={result} onHome={() => { setStudent(null); setView("login"); }} />;
 
-  return <LoginView onTeacherLogin={() => setView("teacher")} onStudentLogin={(nextStudent) => { setStudent(nextStudent); setView("preflight"); }} />;
+  return <LoginView onTeacherLogin={(nextTeacher) => { setTeacher(nextTeacher); setView("teacher"); }} onStudentLogin={(nextStudent) => { setStudent(nextStudent); setView("preflight"); }} />;
 }

@@ -44,6 +44,49 @@ export interface Question {
   answer: number;
 }
 
+export interface TeacherIdentity {
+  id: string;
+  email: string;
+  name: string;
+  isDemo?: boolean;
+}
+
+export type QuestionDifficulty = "easy" | "medium" | "hard";
+
+export interface QuestionBank {
+  id: string;
+  teacherId: string;
+  name: string;
+  subject: string;
+  description: string;
+  questionCount: number;
+  createdAt: string;
+}
+
+export interface BankQuestion {
+  id: string;
+  teacherId: string;
+  bankId: string;
+  content: string;
+  options: string[];
+  correctAnswer: number;
+  difficulty: QuestionDifficulty;
+  topic: string;
+  createdAt: string;
+}
+
+export interface GeneratedExam {
+  id: string;
+  teacherId: string;
+  bankId: string;
+  code: string;
+  title: string;
+  durationMinutes: number;
+  questionCount: number;
+  status: "draft" | "open" | "closed";
+  createdAt: string;
+}
+
 export interface MonitorStatus {
   camera: "starting" | "active" | "blocked" | "off";
   ai: "loading" | "active" | "limited";

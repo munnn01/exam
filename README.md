@@ -1,6 +1,6 @@
 # ExamGuard
 
-Website thi trực tuyến có giám sát phía trình duyệt, triển khai tại [examguard-phi.vercel.app](https://examguard-phi.vercel.app).
+Website thi trực tuyến nhiều giảng viên, có ngân hàng câu hỏi riêng và giám sát phía trình duyệt, triển khai tại [examguard-phi.vercel.app](https://examguard-phi.vercel.app).
 
 ## Tài khoản demo
 
@@ -10,6 +10,8 @@ Website thi trực tuyến có giám sát phía trình duyệt, triển khai t�
 ## Tính năng
 
 - Dashboard giảng viên, cấp/đổi mật khẩu, xuất danh sách CSV và xem nhật ký vi phạm.
+- Đăng ký/đăng nhập giảng viên với Supabase Auth; dữ liệu được tách bằng Row Level Security.
+- Tạo nhiều ngân hàng câu hỏi, nhập CSV, thêm/xóa câu và sinh đề ngẫu nhiên có snapshot.
 - Phòng thi 45 phút với 10 câu hỏi, lưu đáp án, đánh dấu câu và nộp bài.
 - Ghi nhận rời tab, mất fullscreen, copy/cut/paste và mở menu chuột phải.
 - Phát hiện không thấy mặt, nhiều khuôn mặt, nhìn lệch kéo dài và điện thoại bằng MediaPipe chạy ngay trong trình duyệt.
@@ -30,4 +32,13 @@ Mở `http://localhost:3000`.
 pnpm dlx vercel --prod
 ```
 
-Đây là prototype dùng `localStorage`, vì vậy dữ liệu và nhật ký chỉ tồn tại trong từng trình duyệt. Để dùng thật trên nhiều thiết bị cần kết nối cơ sở dữ liệu và xác thực phía máy chủ.
+Khi chưa đặt biến Supabase, ứng dụng tự chạy ở chế độ demo bằng `localStorage`. Khi đã kết nối Supabase, tài khoản và ngân hàng câu hỏi dùng PostgreSQL thật.
+
+## Kết nối Supabase
+
+1. Kết nối Supabase vào project Vercel hoặc tạo project tại Supabase.
+2. Sao chép `.env.example` thành `.env.local` và điền các biến môi trường.
+3. Chạy `pnpm db:migrate` để tạo bảng, trigger và chính sách RLS.
+4. Trong Supabase Auth, thêm `https://examguard-phi.vercel.app/**` vào Redirect URLs.
+
+File CSV mẫu có các cột: `content`, `option_a`, `option_b`, `option_c`, `option_d`, `correct_answer`, `difficulty`, `topic`.
