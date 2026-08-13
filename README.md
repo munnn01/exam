@@ -2,17 +2,18 @@
 
 Website thi trực tuyến nhiều giảng viên, có ngân hàng câu hỏi riêng và giám sát phía trình duyệt, triển khai tại [examguard-phi.vercel.app](https://examguard-phi.vercel.app).
 
-## Tài khoản demo
+## Tài khoản demo khi chạy local
 
 - Giảng viên: `giangvien@demo.vn` / `demo123`
-- Sinh viên: mã đề `ATTT-2026`, mã sinh viên `SV001`, mật khẩu `246810`
+- Sinh viên: mã `SV001`, mật khẩu tài khoản `246810`; mật khẩu file đề `246810`
 
 ## Tính năng
 
 - Dashboard giảng viên, cấp/đổi mật khẩu, xuất danh sách CSV và xem nhật ký vi phạm.
 - Quản trị viên cấp tài khoản giảng viên trực tiếp trong Supabase Auth; website chỉ cho đăng nhập và không gửi email xác nhận.
 - Tạo nhiều ngân hàng câu hỏi, nhập CSV, thêm/xóa câu và sinh đề ngẫu nhiên có snapshot.
-- Sinh viên không cần tài khoản: nhập mã sinh viên bất kỳ, xem danh sách đề đang mở/đã khóa và nhập mật khẩu riêng của file đề.
+- Mỗi giảng viên tự cấp, đổi hoặc xóa tài khoản sinh viên gồm mã sinh viên, họ tên và mật khẩu đăng nhập.
+- Sinh viên đăng nhập bằng tài khoản được cấp, chỉ thấy đề của giảng viên đó và nhập thêm mật khẩu riêng khi mở file đề.
 - Giảng viên tự đặt mật khẩu cho từng file đề và gửi mật khẩu đó cho sinh viên.
 - File đề có vòng đời nháp → mở → khóa → lưu trữ; chỉ nháp chưa có lượt làm được xóa.
 - Hiển thị dung lượng và tự chặn tạo file đề khi database gần đầy.

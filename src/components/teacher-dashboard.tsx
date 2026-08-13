@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -11,6 +11,7 @@ import {
   Download,
   Files,
   LayoutDashboard,
+  KeyRound,
   LogOut,
   Menu,
   MonitorUp,
@@ -20,6 +21,7 @@ import {
   Settings,
   ShieldAlert,
   Smartphone,
+  Trash2,
   Users,
   X,
 } from "lucide-react";
@@ -27,14 +29,13 @@ import { Brand } from "./brand";
 import { ExamFileManager } from "./exam-file-manager";
 import { QuestionBankManager } from "./question-bank-manager";
 import { VIOLATION_LABELS } from "@/lib/demo-data";
-import { formatTime, saveStudents } from "@/lib/store";
+import { formatTime, makePassword } from "@/lib/store";
+import { createStudentAccount, deleteStudentAccount, listTeacherStudentAccounts, resetStudentAccountPassword } from "@/lib/student-account-store";
 import type { ProctorEvent, StudentCredential, TeacherIdentity, ViolationType } from "@/lib/types";
 
 interface TeacherDashboardProps {
   teacher: TeacherIdentity;
   events: ProctorEvent[];
-  students: StudentCredential[];
-  onStudentsChange: (students: StudentCredential[]) => void;
   onLogout: () => void;
 }
 
@@ -47,10 +48,13 @@ const navItems = [
   { id: "settings", label: "Cấu hình kỳ thi", icon: Settings },
 ] as const;
 
-export function TeacherDashboard({ teacher, events, students, onStudentsChange, onLogout }: TeacherDashboardProps) {
+export function TeacherDashboard({ teacher, events, onLogout }: TeacherDashboardProps) {
   const [section, setSection] = useState<(typeof navItems)[number]["id"]>("overview");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showAddStudent, setShowAddStudent] = useState(false);
+  const [students, setStudents] = useState<StudentCredential[]>([]);
+  const [studentsLoading, setStudentsLoading] = useState(true);
+  const [studentMessage, setStudentMessage] = useState<{ error: boolean; text: string } | null>(null);
   const [query, setQuery] = useState("");
 
   const highRisk = events.filter((event) => event.severity === "high").length;
@@ -58,10 +62,25 @@ export function TeacherDashboard({ teacher, events, students, onStudentsChange, 
     `${event.studentName} ${event.studentId} ${VIOLATION_LABELS[event.type]}`.toLowerCase().includes(query.toLowerCase()),
   );
 
-  const updateStudents = (next: StudentCredential[]) => {
-    saveStudents(next);
-    onStudentsChange(next);
+  const loadStudents = async () => {
+    setStudentsLoading(true);
+    try {
+      setStudents(await listTeacherStudentAccounts(teacher));
+    } catch (cause) {
+      setStudentMessage({ error: true, text: cause instanceof Error ? cause.message : "Không tải được tài khoản sinh viên." });
+    } finally {
+      setStudentsLoading(false);
+    }
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    void listTeacherStudentAccounts(teacher)
+      .then((nextStudents) => { if (!cancelled) setStudents(nextStudents); })
+      .catch((cause) => { if (!cancelled) setStudentMessage({ error: true, text: cause instanceof Error ? cause.message : "Không tải được tài khoản sinh viên." }); })
+      .finally(() => { if (!cancelled) setStudentsLoading(false); });
+    return () => { cancelled = true; };
+  }, [teacher]);
 
   const exportCsv = () => {
     const header = "Ma sinh vien,Ho ten,Trang thai";
@@ -133,9 +152,10 @@ export function TeacherDashboard({ teacher, events, students, onStudentsChange, 
 
           {section === "students" && (
             <section>
-              <PageHeading eyebrow="Quản lý truy cập" title="Danh sách sinh viên" copy="Sinh viên dùng mã sinh viên để xem các file đề; mật khẩu được cấp riêng theo từng đề." />
+              <PageHeading eyebrow="Quản lý truy cập" title="Tài khoản sinh viên" copy="Giảng viên tự cấp mã sinh viên và mật khẩu đăng nhập. Sau khi đăng nhập, sinh viên chỉ thấy đề của giảng viên đã cấp tài khoản." />
+              {studentMessage && <div className={`mt-5 flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm font-semibold ${studentMessage.error ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}><span>{studentMessage.text}</span><button onClick={() => setStudentMessage(null)}><X className="h-4 w-4" /></button></div>}
               <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-                <div className="text-sm text-slate-500">{students.length} sinh viên trong kỳ thi</div>
+                <div className="text-sm text-slate-500">{studentsLoading ? "Đang tải tài khoản..." : `${students.length} tài khoản sinh viên`}</div>
                 <div className="flex gap-2">
                   <button className="secondary-button" onClick={exportCsv}><Download className="h-4 w-4" /> Xuất CSV</button>
                   <button className="primary-button !h-10 !px-4" onClick={() => setShowAddStudent(true)}><Plus className="h-4 w-4" /> Thêm sinh viên</button>
@@ -144,17 +164,19 @@ export function TeacherDashboard({ teacher, events, students, onStudentsChange, 
               <div className="panel mt-4 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="data-table min-w-[780px]">
-                    <thead><tr><th>Sinh viên</th><th>Trạng thái gần nhất</th></tr></thead>
+                    <thead><tr><th>Sinh viên</th><th>Trạng thái gần nhất</th><th>Quản lý tài khoản</th></tr></thead>
                     <tbody>
                       {students.map((student) => (
                         <tr key={student.id}>
                           <td><div className="font-bold text-slate-900">{student.name}</div><div className="mt-1 text-[11px] text-slate-500">{student.id}</div></td>
                           <td><StatusBadge status={student.status} /></td>
+                          <td><div className="flex flex-wrap gap-2"><button className="mini-action" onClick={async () => { const password = window.prompt(`Nhập mật khẩu mới cho ${student.id}`, makePassword()); if (!password) return; try { await resetStudentAccountPassword(teacher, student.id, password); setStudentMessage({ error: false, text: `Đã đổi mật khẩu ${student.id}: ${password}` }); } catch (cause) { setStudentMessage({ error: true, text: cause instanceof Error ? cause.message : "Không thể đổi mật khẩu." }); } }}><KeyRound className="h-3.5 w-3.5" /> Đổi mật khẩu</button><button className="mini-action danger" onClick={async () => { if (!window.confirm(`Xóa tài khoản ${student.id}? Lịch sử bài thi vẫn được giữ lại.`)) return; try { await deleteStudentAccount(teacher, student.id); await loadStudents(); setStudentMessage({ error: false, text: `Đã xóa tài khoản ${student.id}.` }); } catch (cause) { setStudentMessage({ error: true, text: cause instanceof Error ? cause.message : "Không thể xóa tài khoản." }); } }}><Trash2 className="h-3.5 w-3.5" /> Xóa</button></div></td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
+                {!studentsLoading && !students.length && <div className="grid min-h-56 place-items-center p-8 text-center"><div><Users className="mx-auto h-9 w-9 text-slate-300" /><h3 className="mt-3 text-sm font-bold">Chưa có tài khoản sinh viên</h3><p className="mt-1 text-xs text-slate-500">Nhấn “Thêm sinh viên” để cấp mã và mật khẩu đăng nhập.</p></div></div>}
               </div>
             </section>
           )}
@@ -174,7 +196,7 @@ export function TeacherDashboard({ teacher, events, students, onStudentsChange, 
         </main>
       </div>
 
-      {showAddStudent && <AddStudentModal onClose={() => setShowAddStudent(false)} onAdd={(student) => { updateStudents([student, ...students]); setShowAddStudent(false); }} />}
+      {showAddStudent && <AddStudentModal onClose={() => setShowAddStudent(false)} onAdd={async (input) => { const student = await createStudentAccount(teacher, input); setShowAddStudent(false); await loadStudents(); setStudentMessage({ error: false, text: `Đã cấp tài khoản ${student.id}. Mật khẩu gửi sinh viên: ${input.password}` }); }} />}
     </div>
   );
 }
@@ -210,9 +232,10 @@ function Overview({ teacher, events, students, highRisk, setSection }: { teacher
               <div><div className="text-sm font-bold">{inProgress || 1} sinh viên đang thi</div><div className="mt-1 text-[11px] text-slate-500">Cập nhật vài giây trước</div></div>
             </div>
             <div className="space-y-4 py-5">
-              {students.filter((s) => s.status === "Đang thi").concat(students[1]).slice(0, 2).map((student, index) => (
+              {students.filter((s) => s.status === "Đang thi").slice(0, 2).map((student, index) => (
                 <div className="flex items-center gap-3" key={`${student.id}-${index}`}><div className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">{student.name.split(" ").slice(-2).map((p) => p[0]).join("")}</div><div className="min-w-0 flex-1"><div className="truncate text-xs font-bold">{student.name}</div><div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full w-[64%] rounded-full bg-teal-600" /></div></div><div className="text-[10px] font-bold text-slate-500">28:34</div></div>
               ))}
+              {!students.some((student) => student.status === "Đang thi") && <div className="rounded-xl bg-slate-50 p-4 text-center text-xs text-slate-500">Chưa có sinh viên đang làm bài.</div>}
             </div>
             <div className="rounded-xl bg-amber-50 p-3 text-[11px] leading-5 text-amber-800"><strong>Lưu ý:</strong> sự kiện AI được giữ để giảng viên xem lại, không tự động đánh trượt.</div>
           </div>
@@ -249,9 +272,11 @@ function PageHeading({ eyebrow, title, copy }: { eyebrow: string; title: string;
   return <div><div className="text-[10px] font-bold uppercase tracking-[.2em] text-teal-700">{eyebrow}</div><h1 className="mt-2 text-3xl font-bold tracking-[-.045em] text-slate-950 md:text-4xl">{title}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">{copy}</p></div>;
 }
 
-function AddStudentModal({ onClose, onAdd }: { onClose: () => void; onAdd: (student: StudentCredential) => void }) {
-  const [form, setForm] = useState({ id: "", name: "" });
-  return <div className="modal-backdrop"><form className="modal-card" onSubmit={(e) => { e.preventDefault(); if (form.id.trim() && form.name.trim()) onAdd({ ...form, id: form.id.toUpperCase(), password: "", examCode: "", status: "Chưa thi" }); }}><div className="flex items-center justify-between"><div><div className="text-xs font-bold text-teal-700">Cấp quyền dự thi</div><h2 className="mt-1 text-2xl font-bold tracking-[-.04em]">Thêm sinh viên</h2></div><button type="button" className="icon-button" onClick={onClose}><X className="h-5 w-5" /></button></div><div className="mt-6 space-y-4"><label className="block"><span className="form-label">Mã sinh viên</span><input className="form-input" value={form.id} onChange={(e) => setForm({ ...form, id: e.target.value })} placeholder="SV005" /></label><label className="block"><span className="form-label">Họ và tên</span><input className="form-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Nguyễn Văn A" /></label><div className="rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600">Không cần cấp mật khẩu cho sinh viên tại đây. Mật khẩu được tạo khi giảng viên tạo file đề.</div></div><div className="mt-7 flex justify-end gap-2"><button type="button" className="secondary-button" onClick={onClose}>Hủy</button><button className="primary-button !h-10 !px-5" type="submit"><Plus className="h-4 w-4" /> Thêm sinh viên</button></div></form></div>;
+function AddStudentModal({ onClose, onAdd }: { onClose: () => void; onAdd: (input: { id: string; name: string; password: string }) => Promise<void> }) {
+  const [form, setForm] = useState(() => ({ id: "", name: "", password: makePassword() }));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  return <div className="modal-backdrop"><form className="modal-card" onSubmit={async (event) => { event.preventDefault(); setBusy(true); setError(""); try { if (form.id.trim().length < 2 || form.name.trim().length < 2) throw new Error("Cần nhập đầy đủ mã sinh viên và họ tên."); if (form.password.length < 6) throw new Error("Mật khẩu cần ít nhất 6 ký tự."); await onAdd({ ...form, id: form.id.trim().toUpperCase(), name: form.name.trim() }); } catch (cause) { setError(cause instanceof Error ? cause.message : "Không thể tạo tài khoản."); setBusy(false); } }}><div className="flex items-center justify-between"><div><div className="text-xs font-bold text-teal-700">Cấp tài khoản đăng nhập</div><h2 className="mt-1 text-2xl font-bold tracking-[-.04em]">Thêm sinh viên</h2></div><button type="button" className="icon-button" onClick={onClose}><X className="h-5 w-5" /></button></div><div className="mt-6 space-y-4"><label className="block"><span className="form-label">Mã sinh viên</span><input className="form-input uppercase" required value={form.id} onChange={(e) => setForm({ ...form, id: e.target.value })} placeholder="SV005" /></label><label className="block"><span className="form-label">Họ và tên</span><input className="form-input" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Nguyễn Văn A" /></label><label className="block"><span className="form-label">Mật khẩu đăng nhập</span><div className="flex gap-2"><input className="form-input font-mono tracking-[.1em]" required minLength={6} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /><button type="button" className="secondary-button shrink-0" onClick={() => setForm({ ...form, password: makePassword() })}>Tạo mới</button></div></label><div className="rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-800">Gửi mã sinh viên và mật khẩu này cho sinh viên. Mật khẩu được mã hóa và không thể xem lại; giảng viên có thể đặt mật khẩu mới khi cần.</div></div>{error && <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">{error}</div>}<div className="mt-7 flex justify-end gap-2"><button type="button" className="secondary-button" onClick={onClose}>Hủy</button><button disabled={busy} className="primary-button !h-10 !px-5" type="submit"><Plus className="h-4 w-4" /> {busy ? "Đang tạo..." : "Cấp tài khoản"}</button></div></form></div>;
 }
 
 function ExamSettings() {

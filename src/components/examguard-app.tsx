@@ -7,7 +7,7 @@ import { FinishedView } from "./finished-view";
 import { LoginView } from "./login-view";
 import { StudentExamPortal } from "./student-exam-portal";
 import { TeacherDashboard } from "./teacher-dashboard";
-import { getEvents, getStudents } from "@/lib/store";
+import { getEvents } from "@/lib/store";
 import { getCurrentTeacher, signOutTeacher } from "@/lib/teacher-auth";
 import type { ActiveExam, AppView, ProctorEvent, StudentCredential, TeacherIdentity } from "@/lib/types";
 
@@ -16,15 +16,12 @@ export function ExamGuardApp() {
   const [student, setStudent] = useState<StudentCredential | null>(null);
   const [activeExam, setActiveExam] = useState<ActiveExam | null>(null);
   const [teacher, setTeacher] = useState<TeacherIdentity | null>(null);
-  const [students, setStudents] = useState<StudentCredential[]>([]);
   const [events, setEvents] = useState<ProctorEvent[]>([]);
   const [result, setResult] = useState<{ score: number | null; total: number; violations: number }>({ score: null, total: 0, violations: 0 });
 
   useEffect(() => {
     const refreshEvents = () => setEvents(getEvents());
-    const refreshStudents = () => setStudents(getStudents());
     refreshEvents();
-    refreshStudents();
     void getCurrentTeacher().then((current) => {
       if (current) {
         setTeacher(current);
@@ -32,14 +29,12 @@ export function ExamGuardApp() {
       }
     });
     window.addEventListener("examguard:event", refreshEvents);
-    window.addEventListener("examguard:students", refreshStudents);
     return () => {
       window.removeEventListener("examguard:event", refreshEvents);
-      window.removeEventListener("examguard:students", refreshStudents);
     };
   }, []);
 
-  if (view === "teacher" && teacher) return <TeacherDashboard teacher={teacher} events={events} students={students} onStudentsChange={setStudents} onLogout={() => { void signOutTeacher(); setTeacher(null); setView("login"); }} />;
+  if (view === "teacher" && teacher) return <TeacherDashboard teacher={teacher} events={events} onLogout={() => { void signOutTeacher(); setTeacher(null); setView("login"); }} />;
   if (view === "student-portal" && student) return <StudentExamPortal student={student} onBack={() => { setStudent(null); setView("login"); }} onSelect={(exam) => { setActiveExam(exam); setStudent({ ...student, examCode: exam.code }); setView("preflight"); }} />;
   if (view === "preflight" && student && activeExam) return <ExamPreflight student={student} exam={activeExam} onBack={() => setView("student-portal")} onStart={() => setView("exam")} />;
   if (view === "exam" && student && activeExam) return <ExamRoom student={student} exam={activeExam} onFinish={(nextResult) => { setResult(nextResult); setView("finished"); }} />;

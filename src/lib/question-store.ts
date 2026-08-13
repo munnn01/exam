@@ -324,14 +324,17 @@ export async function deleteDraftExam(teacher: TeacherIdentity, examId: string) 
   if (error) throw friendlyError(error.message);
 }
 
-export async function listStudentExamFiles(): Promise<StudentExamSummary[]> {
+export async function listStudentExamFiles(student: StudentCredential): Promise<StudentExamSummary[]> {
   if (!isSupabaseConfigured()) {
     seedDemoExamFiles();
     return readLocal<GeneratedExam[]>(EXAMS_KEY, []).map(normalizeLocalExam)
       .filter((exam) => exam.status === "open" || exam.status === "closed")
       .map((exam) => ({ id: exam.id, code: exam.code, title: exam.title, teacherName: DEMO_TEACHER.name, durationMinutes: exam.durationMinutes, questionCount: exam.questionCount, status: exam.status as "open" | "closed" }));
   }
-  const { data, error } = await getSupabaseBrowserClient().rpc("list_student_exam_files");
+  const { data, error } = await getSupabaseBrowserClient().rpc("list_student_exam_files", {
+    p_student_id: student.id,
+    p_account_password: student.password,
+  });
   if (error) throw friendlyError(error.message);
   return (data ?? []).map((row: Record<string, unknown>) => ({
     id: String(row.id), code: String(row.code), title: String(row.title), teacherName: String(row.teacher_name),
@@ -352,7 +355,10 @@ export async function unlockStudentExam(student: StudentCredential, examId: stri
     return { id: exam.id, code: exam.code, title: exam.title, teacherName: DEMO_TEACHER.name, durationMinutes: exam.durationMinutes, questionCount: exam.questionCount, status: "open", questions };
   }
   const { data, error } = await getSupabaseBrowserClient().rpc("unlock_exam_file", {
-    p_exam_id: examId, p_student_id: student.id, p_student_name: student.name, p_password: password,
+    p_exam_id: examId,
+    p_student_id: student.id,
+    p_account_password: student.password,
+    p_exam_password: password,
   });
   if (error) throw friendlyError(error.message);
   return data as ActiveExam;

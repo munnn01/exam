@@ -22,7 +22,7 @@ export function StudentExamPortal({ student, onBack, onSelect }: StudentExamPort
     setLoading(true);
     setError("");
     try {
-      setExams(await listStudentExamFiles());
+      setExams(await listStudentExamFiles(student));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Không tải được danh sách đề.");
     } finally {
@@ -32,12 +32,12 @@ export function StudentExamPortal({ student, onBack, onSelect }: StudentExamPort
 
   useEffect(() => {
     let cancelled = false;
-    void listStudentExamFiles()
+    void listStudentExamFiles(student)
       .then((nextExams) => { if (!cancelled) setExams(nextExams); })
       .catch((cause) => { if (!cancelled) setError(cause instanceof Error ? cause.message : "Không tải được danh sách đề."); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [student]);
 
   return (
     <main className="min-h-screen bg-[#f4f7f8]">

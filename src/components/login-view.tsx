@@ -5,6 +5,7 @@ import { ArrowRight, Eye, EyeOff, GraduationCap, LockKeyhole, ShieldCheck, UserR
 import { Brand } from "./brand";
 import { DEMO_TEACHER } from "@/lib/demo-data";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { signInStudentAccount } from "@/lib/student-account-store";
 import { signInTeacher } from "@/lib/teacher-auth";
 import type { StudentCredential, TeacherIdentity } from "@/lib/types";
 
@@ -17,9 +18,11 @@ export function LoginView({ onTeacherLogin, onStudentLogin }: LoginViewProps) {
   const cloudReady = isSupabaseConfigured();
   const [role, setRole] = useState<"student" | "teacher">("student");
   const [showPassword, setShowPassword] = useState(false);
+  const [showStudentPassword, setShowStudentPassword] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [studentId, setStudentId] = useState(cloudReady ? "" : "SV001");
+  const [studentPassword, setStudentPassword] = useState(cloudReady ? "" : "246810");
   const [teacherForm, setTeacherForm] = useState(() => ({
     email: cloudReady ? "" : DEMO_TEACHER.email,
     password: cloudReady ? "" : DEMO_TEACHER.password,
@@ -39,15 +42,7 @@ export function LoginView({ onTeacherLogin, onStudentLogin }: LoginViewProps) {
         onTeacherLogin(await signInTeacher(teacherForm.email, teacherForm.password));
         return;
       }
-      const normalizedStudentId = studentId.trim().toUpperCase();
-      if (normalizedStudentId.length < 2) throw new Error("Vui lòng nhập mã sinh viên hợp lệ.");
-      onStudentLogin({
-        id: normalizedStudentId,
-        name: normalizedStudentId,
-        password: "",
-        examCode: "",
-        status: "Chưa thi",
-      });
+      onStudentLogin(await signInStudentAccount(studentId, studentPassword));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Đã xảy ra lỗi. Vui lòng thử lại.");
     } finally {
@@ -93,7 +88,8 @@ export function LoginView({ onTeacherLogin, onStudentLogin }: LoginViewProps) {
             <form className="mt-6 space-y-4" onSubmit={(event) => void submit(event)}>
               {role === "student" ? <>
                 <Field label="Mã sinh viên"><input value={studentId} onChange={(e) => setStudentId(e.target.value)} placeholder="Nhập mã sinh viên" /></Field>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-600">Sinh viên không cần tài khoản riêng. Nhập mã sinh viên, chọn đề đang mở rồi dùng mật khẩu do giảng viên cung cấp.</div>
+                <Field label="Mật khẩu tài khoản"><PasswordInput value={studentPassword} show={showStudentPassword} onShow={() => setShowStudentPassword(!showStudentPassword)} onChange={setStudentPassword} /></Field>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-600">Tài khoản sinh viên do giảng viên cấp. Sau khi đăng nhập, chọn đề đang mở và nhập mật khẩu riêng của file đề.</div>
               </> : <>
                 <Field label="Email giảng viên"><input type="email" required value={teacherForm.email} onChange={(e) => setTeacherForm({ ...teacherForm, email: e.target.value })} /></Field>
                 <Field label="Mật khẩu"><PasswordInput value={teacherForm.password} show={showPassword} onShow={() => setShowPassword(!showPassword)} onChange={(password) => setTeacherForm({ ...teacherForm, password })} /></Field>
