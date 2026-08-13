@@ -87,6 +87,8 @@ export interface GeneratedExam {
   status: "draft" | "open" | "closed" | "archived";
   accessPassword?: string;
   attemptCount: number;
+  assignedAt: string;
+  maxAttempts: number;
   createdAt: string;
 }
 
@@ -98,10 +100,54 @@ export interface StudentExamSummary {
   durationMinutes: number;
   questionCount: number;
   status: "open" | "closed";
+  assignedAt: string;
+  maxAttempts: number;
+  attemptCount: number;
+  hasActiveAttempt: boolean;
 }
 
 export interface ActiveExam extends StudentExamSummary {
   questions: Question[];
+  attemptId: string;
+  attemptNumber: number;
+  startedAt: string;
+  remainingSeconds: number;
+  savedAnswers: Record<number, number>;
+}
+
+export interface ExamAttemptSummary {
+  id: string;
+  examId: string;
+  examCode: string;
+  examTitle: string;
+  studentId: string;
+  studentName: string;
+  attemptNumber: number;
+  startedAt: string;
+  lastSavedAt?: string;
+  submittedAt?: string;
+  score?: number;
+  questionCount: number;
+  answeredCount: number;
+}
+
+export interface AttemptQuestionDetail {
+  position: number;
+  content: string;
+  options: string[];
+  correctAnswer: number;
+  selectedAnswer?: number;
+}
+
+export interface AnswerHistoryEntry {
+  questionPosition: number;
+  selectedAnswer: number;
+  changedAt: string;
+}
+
+export interface ExamAttemptDetail extends ExamAttemptSummary {
+  questions: AttemptQuestionDetail[];
+  history: AnswerHistoryEntry[];
 }
 
 export interface StorageStatus {

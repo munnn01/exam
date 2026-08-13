@@ -11,6 +11,7 @@ import {
   getStorageStatus,
   listBankQuestions,
   listQuestionBanks,
+  type ExamInput,
   type QuestionInput,
 } from "@/lib/question-store";
 import type { BankQuestion, QuestionBank, StorageStatus, TeacherIdentity } from "@/lib/types";
@@ -179,9 +180,51 @@ function ImportModal({ bank, onClose, onImport }: { bank: QuestionBank; onClose:
   return <ModalShell eyebrow="Thêm hàng loạt" title={`Nhập CSV vào ${bank.name}`} onClose={onClose}><div className="mt-6 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-7 text-center"><FileUp className="mx-auto h-8 w-8 text-teal-600" /><div className="mt-3 text-sm font-bold">{fileName || "Chọn file CSV UTF-8"}</div><div className="mt-1 text-xs leading-5 text-slate-500">Mỗi dòng gồm câu hỏi, 4 phương án và đáp án đúng. Chọn file xong, hệ thống sẽ tự động nhập ngay.</div><input ref={inputRef} className="hidden" type="file" accept=".csv,text/csv" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) parseFile(file); }} /><div className="mt-5 flex flex-wrap justify-center gap-2"><a className="secondary-button" href="/mau-cau-hoi.csv" download><Download className="h-4 w-4" /> Tải CSV mẫu</a><button className="primary-button" disabled={busy} onClick={() => inputRef.current?.click()}><FileUp className="h-4 w-4" /> {busy ? `Đang nhập ${importingCount} câu...` : "Chọn file CSV"}</button></div></div>{error && <ErrorBox text={error} />}<div className="mt-6 flex justify-end"><button className="secondary-button" disabled={busy} onClick={onClose}>Đóng</button></div></ModalShell>;
 }
 
-function ExamModal({ bank, availableCount, onClose, onCreate }: { bank: QuestionBank; availableCount: number; onClose: () => void; onCreate: (input: { bankId: string; code: string; title: string; durationMinutes: number; questionCount: number; password: string }) => Promise<void> }) {
-  const [form, setForm] = useState(() => ({ code: `DE-${String(Date.now()).slice(-6)}`, title: `Đề thi — ${bank.subject || bank.name}`, durationMinutes: 45, questionCount: Math.min(10, availableCount), password: String(Math.floor(100000 + Math.random() * 900000)) })); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
-  return <ModalShell eyebrow="Lấy ngẫu nhiên và đóng băng nội dung" title="Tạo đề tự động" onClose={onClose}><form onSubmit={async (event) => { event.preventDefault(); setBusy(true); setError(""); try { await onCreate({ bankId: bank.id, ...form, code: form.code.trim().toUpperCase() }); } catch (cause) { setError(cause instanceof Error ? cause.message : "Không thể tạo đề."); setBusy(false); } }}><div className="mt-6 rounded-xl bg-teal-50 p-4 text-xs leading-5 text-teal-900">Ngân hàng có <strong>{availableCount} câu</strong>. Hệ thống sẽ chọn ngẫu nhiên và lưu bản chụp câu hỏi để việc sửa ngân hàng sau này không làm thay đổi đề.</div><div className="mt-5 grid gap-4 sm:grid-cols-2"><FormField label="Mã đề"><input className="form-input uppercase" required value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} /></FormField><FormField label="Mật khẩu gửi sinh viên"><input className="form-input font-mono tracking-[.12em]" required minLength={4} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></FormField><div className="sm:col-span-2"><FormField label="Tên đề"><input className="form-input" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></FormField></div><FormField label="Thời lượng (phút)"><input className="form-input" type="number" min={5} max={360} value={form.durationMinutes} onChange={(e) => setForm({ ...form, durationMinutes: Number(e.target.value) })} /></FormField><FormField label="Số câu"><input className="form-input" type="number" min={1} max={availableCount} value={form.questionCount} onChange={(e) => setForm({ ...form, questionCount: Number(e.target.value) })} /></FormField></div><div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">Hãy lưu mật khẩu này và gửi cho sinh viên sau khi mở đề. Vì lý do bảo mật, hệ thống không thể đọc lại mật khẩu đã mã hóa.</div>{error && <ErrorBox text={error} />}<ModalActions busy={busy} onClose={onClose} submitLabel="Tạo đề" /></form></ModalShell>;
+function ExamModal({ bank, availableCount, onClose, onCreate }: { bank: QuestionBank; availableCount: number; onClose: () => void; onCreate: (input: ExamInput) => Promise<void> }) {
+  const [form, setForm] = useState(() => ({
+    code: `DE-${String(Date.now()).slice(-6)}`,
+    title: `Đề thi — ${bank.subject || bank.name}`,
+    durationMinutes: 45,
+    questionCount: Math.min(10, availableCount),
+    password: String(Math.floor(100000 + Math.random() * 900000)),
+    assignedAt: toDateTimeInput(new Date()),
+    maxAttempts: 1,
+  }));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  return <ModalShell eyebrow="Lấy ngẫu nhiên và đóng băng nội dung" title="Tạo đề tự động" onClose={onClose}>
+    <form onSubmit={async (event) => {
+      event.preventDefault();
+      setBusy(true);
+      setError("");
+      try {
+        await onCreate({ bankId: bank.id, ...form, code: form.code.trim().toUpperCase(), assignedAt: new Date(form.assignedAt).toISOString() });
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Không thể tạo đề.");
+        setBusy(false);
+      }
+    }}>
+      <div className="mt-6 rounded-xl bg-teal-50 p-4 text-xs leading-5 text-teal-900">Ngân hàng có <strong>{availableCount} câu</strong>. Hệ thống sẽ chọn ngẫu nhiên và lưu bản chụp câu hỏi để việc sửa ngân hàng sau này không làm thay đổi đề.</div>
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <FormField label="Mã đề"><input className="form-input uppercase" required value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value })} /></FormField>
+        <FormField label="Mật khẩu gửi sinh viên"><input className="form-input font-mono tracking-[.12em]" required minLength={4} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></FormField>
+        <div className="sm:col-span-2"><FormField label="Tên đề"><input className="form-input" required value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></FormField></div>
+        <FormField label="Thời lượng (phút)"><input className="form-input" type="number" min={5} max={360} value={form.durationMinutes} onChange={(event) => setForm({ ...form, durationMinutes: Number(event.target.value) })} /></FormField>
+        <FormField label="Số câu"><input className="form-input" type="number" min={1} max={availableCount} value={form.questionCount} onChange={(event) => setForm({ ...form, questionCount: Number(event.target.value) })} /></FormField>
+        <FormField label="Ngày và giờ giao"><input className="form-input" required type="datetime-local" value={form.assignedAt} onChange={(event) => setForm({ ...form, assignedAt: event.target.value })} /></FormField>
+        <FormField label="Số lượt làm tối đa / sinh viên"><input className="form-input" required type="number" min={1} max={20} value={form.maxAttempts} onChange={(event) => setForm({ ...form, maxAttempts: Number(event.target.value) })} /></FormField>
+      </div>
+      <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">Sinh viên chỉ bắt đầu được từ ngày giao và không thể vượt quá số lượt đã đặt. Hãy lưu mật khẩu vì hệ thống không thể đọc lại mật khẩu đã mã hóa.</div>
+      {error && <ErrorBox text={error} />}
+      <ModalActions busy={busy} onClose={onClose} submitLabel="Tạo đề" />
+    </form>
+  </ModalShell>;
+}
+
+function toDateTimeInput(date: Date) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
 }
 
 function FormField({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block"><span className="form-label">{label}</span>{children}</label>; }

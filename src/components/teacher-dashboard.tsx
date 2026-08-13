@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Download,
   Files,
+  FileCheck2,
   LayoutDashboard,
   KeyRound,
   LogOut,
@@ -27,6 +28,7 @@ import {
   X,
 } from "lucide-react";
 import { Brand } from "./brand";
+import { AttemptHistoryManager } from "./attempt-history-manager";
 import { ExamFileManager } from "./exam-file-manager";
 import { QuestionBankManager } from "./question-bank-manager";
 import { VIOLATION_LABELS } from "@/lib/demo-data";
@@ -45,6 +47,7 @@ const navItems = [
   { id: "questions", label: "Ngân hàng câu hỏi", icon: BookOpenCheck },
   { id: "exam-files", label: "File đề thi", icon: Files },
   { id: "students", label: "Danh sách sinh viên", icon: Users },
+  { id: "attempts", label: "Bài làm & đáp án", icon: FileCheck2 },
   { id: "events", label: "Nhật ký giám sát", icon: ShieldAlert },
   { id: "settings", label: "Cấu hình kỳ thi", icon: Settings },
 ] as const;
@@ -205,6 +208,8 @@ export function TeacherDashboard({ teacher, onLogout }: TeacherDashboardProps) {
               </div>
             </section>
           )}
+
+          {section === "attempts" && <AttemptHistoryManager teacher={teacher} />}
 
           {section === "events" && (
             <section>

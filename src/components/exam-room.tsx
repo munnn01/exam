@@ -10,10 +10,12 @@ import {
   Flag,
   Menu,
   MonitorUp,
+  Save,
   ShieldCheck,
   X,
 } from "lucide-react";
 import { Brand } from "./brand";
+import { saveExamAnswers, submitExamAttempt } from "@/lib/attempt-store";
 import { recordProctorEvent } from "@/lib/proctor-event-store";
 import type { ActiveExam, ProctorEvent, StudentCredential } from "@/lib/types";
 import { useProctoring } from "@/hooks/use-proctoring";
@@ -29,14 +31,18 @@ export function ExamRoom({ student, exam, screenStream, onFinish }: ExamRoomProp
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(screenStream);
   const finishingRef = useRef(false);
+  const saveChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const saveVersionRef = useRef(0);
   const [questionIndex, setQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<number, number>>({});
+  const [answers, setAnswers] = useState<Record<number, number>>(exam.savedAnswers);
   const [flagged, setFlagged] = useState<number[]>([]);
-  const [remaining, setRemaining] = useState(exam.durationMinutes * 60);
+  const [remaining, setRemaining] = useState(exam.remainingSeconds);
   const [sharedStream, setSharedStream] = useState<MediaStream | null>(screenStream);
   const [screenActive, setScreenActive] = useState(screenStream.getVideoTracks().some((track) => track.readyState === "live"));
   const [screenError, setScreenError] = useState("");
   const [finishing, setFinishing] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error">("saved");
+  const [finishError, setFinishError] = useState("");
   const [navOpen, setNavOpen] = useState(false);
 
   const handleViolation = useCallback((input: Omit<ProctorEvent, "id" | "occurredAt" | "studentId" | "studentName" | "examCode">) => {
@@ -97,16 +103,45 @@ export function ExamRoom({ student, exam, screenStream, onFinish }: ExamRoomProp
     }
   };
 
+  const persistAnswers = useCallback((nextAnswers: Record<number, number>) => {
+    const operation = saveChainRef.current
+      .catch(() => undefined)
+      .then(() => saveExamAnswers(student, exam, nextAnswers));
+    saveChainRef.current = operation;
+    return operation;
+  }, [exam, student]);
+
+  const selectAnswer = (questionId: number, answer: number) => {
+    const nextAnswers = { ...answers, [questionId]: answer };
+    const saveVersion = saveVersionRef.current + 1;
+    saveVersionRef.current = saveVersion;
+    setAnswers(nextAnswers);
+    setSaveStatus("saving");
+    void persistAnswers(nextAnswers)
+      .then(() => { if (saveVersionRef.current === saveVersion) setSaveStatus("saved"); })
+      .catch(() => { if (saveVersionRef.current === saveVersion) setSaveStatus("error"); });
+  };
+
   const finish = useCallback(async () => {
     if (finishing) return;
     finishingRef.current = true;
     setFinishing(true);
-    const canGradeLocally = exam.questions.every((question) => typeof question.answer === "number");
-    const score = canGradeLocally ? exam.questions.reduce((sum, question) => sum + (answers[question.id] === question.answer ? 1 : 0), 0) : null;
-    screenStreamRef.current?.getTracks().forEach((track) => track.stop());
-    if (document.fullscreenElement) await document.exitFullscreen().catch(() => undefined);
-    onFinish({ score, total: exam.questions.length, answers });
-  }, [answers, exam.questions, finishing, onFinish]);
+    setFinishError("");
+    try {
+      setSaveStatus("saving");
+      await persistAnswers(answers);
+      const result = await submitExamAttempt(student, exam);
+      setSaveStatus("saved");
+      screenStreamRef.current?.getTracks().forEach((track) => track.stop());
+      if (document.fullscreenElement) await document.exitFullscreen().catch(() => undefined);
+      onFinish({ score: null, total: result.total, answers });
+    } catch (cause) {
+      finishingRef.current = false;
+      setFinishing(false);
+      setSaveStatus("error");
+      setFinishError(cause instanceof Error ? cause.message : "Không thể lưu và nộp bài. Hãy thử lại.");
+    }
+  }, [answers, exam, finishing, onFinish, persistAnswers, student]);
 
   useEffect(() => {
     const timer = setInterval(() => setRemaining((current) => {
@@ -141,6 +176,7 @@ export function ExamRoom({ student, exam, screenStream, onFinish }: ExamRoomProp
           </div>
         </div>
         <div className="flex items-center gap-2 md:gap-4">
+          <div className={`hidden items-center gap-1.5 rounded-full px-3 py-2 text-[10px] font-bold sm:flex ${saveStatus === "error" ? "bg-rose-50 text-rose-700" : saveStatus === "saving" ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}><Save className="h-3.5 w-3.5" /> {saveStatus === "saving" ? "Đang lưu..." : saveStatus === "error" ? "Lưu bị lỗi" : "Đã tự động lưu"}</div>
           <div className={`exam-timer ${remaining < 300 ? "urgent" : ""}`}><Clock3 className="h-4 w-4" /><span>{minutes}:{seconds}</span></div>
           <button className="secondary-button hidden sm:flex" onClick={() => void finish()}><Flag className="h-4 w-4" /> Nộp bài</button>
           <button className="icon-button sm:hidden" onClick={() => setNavOpen(true)}><Menu className="h-5 w-5" /></button>
@@ -169,7 +205,7 @@ export function ExamRoom({ student, exam, screenStream, onFinish }: ExamRoomProp
             <div className="mt-8 space-y-3">
               {question.options.map((option, index) => {
                 const selected = answers[question.id] === index;
-                return <button key={option} className={`answer-option ${selected ? "selected" : ""}`} onClick={() => setAnswers((current) => ({ ...current, [question.id]: index }))}><span className="answer-letter">{String.fromCharCode(65 + index)}</span><span className="flex-1 text-left">{option}</span>{selected && <span className="grid h-6 w-6 place-items-center rounded-full bg-teal-700 text-white"><Check className="h-3.5 w-3.5" /></span>}</button>;
+                return <button key={option} className={`answer-option ${selected ? "selected" : ""}`} onClick={() => selectAnswer(question.id, index)}><span className="answer-letter">{String.fromCharCode(65 + index)}</span><span className="flex-1 text-left">{option}</span>{selected && <span className="grid h-6 w-6 place-items-center rounded-full bg-teal-700 text-white"><Check className="h-3.5 w-3.5" /></span>}</button>;
               })}
             </div>
           </div>
@@ -205,6 +241,7 @@ export function ExamRoom({ student, exam, screenStream, onFinish }: ExamRoomProp
           </div>
         </aside>
       </div>
+      {finishError && <div className="fixed bottom-5 left-1/2 z-50 w-[min(92vw,560px)] -translate-x-1/2 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700 shadow-xl"><div className="flex items-center justify-between gap-3"><span>{finishError}</span><button onClick={() => setFinishError("")}><X className="h-4 w-4" /></button></div></div>}
     </main>
   );
 }

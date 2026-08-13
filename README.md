@@ -15,9 +15,12 @@ Website thi trực tuyến nhiều giảng viên, có ngân hàng câu hỏi ri�
 - Mỗi giảng viên tự cấp, đổi hoặc xóa tài khoản sinh viên gồm mã sinh viên, họ tên và mật khẩu đăng nhập.
 - Sinh viên đăng nhập bằng tài khoản được cấp, chỉ thấy đề của giảng viên đó và nhập thêm mật khẩu riêng khi mở file đề.
 - Giảng viên tự đặt mật khẩu cho từng file đề và gửi mật khẩu đó cho sinh viên.
+- Giảng viên đặt ngày/giờ giao và số lượt làm tối đa riêng cho từng file đề.
 - File đề có vòng đời nháp → mở → khóa → lưu trữ; chỉ nháp chưa có lượt làm được xóa.
 - Hiển thị dung lượng và tự chặn tạo file đề khi database gần đầy.
 - Phòng thi 45 phút với 10 câu hỏi, lưu đáp án, đánh dấu câu và nộp bài.
+- Đáp án được lưu ngay sau mỗi lần chọn; tải lại hoặc đăng nhập lại sẽ khôi phục đúng lượt, đáp án và thời gian còn lại.
+- Dashboard giảng viên có lịch sử từng lượt làm, đáp án cuối và các mốc thay đổi đáp án theo từng câu.
 - Ghi nhận rời tab, mất fullscreen, copy/cut/paste và mở menu chuột phải.
 - Phát hiện không thấy mặt, nhiều khuôn mặt, nhìn lệch kéo dài và điện thoại bằng MediaPipe chạy ngay trong trình duyệt.
 - Bắt buộc chia sẻ Toàn bộ màn hình; ghi nhận cảnh báo mức cao nếu dừng chia sẻ trong lúc thi.

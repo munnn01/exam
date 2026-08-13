@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, BookOpenCheck, Clock3, FileLock2, FileText, KeyRound, LockKeyhole, RefreshCw, ShieldCheck, UnlockKeyhole, X } from "lucide-react";
+import { ArrowLeft, BookOpenCheck, CalendarDays, Clock3, FileLock2, FileText, KeyRound, LockKeyhole, RefreshCw, RotateCcw, ShieldCheck, UnlockKeyhole, X } from "lucide-react";
 import { Brand } from "./brand";
 import { listStudentExamFiles, unlockStudentExam } from "@/lib/question-store";
 import type { ActiveExam, StudentCredential, StudentExamSummary } from "@/lib/types";
@@ -17,12 +17,14 @@ export function StudentExamPortal({ student, onBack, onSelect }: StudentExamPort
   const [selected, setSelected] = useState<StudentExamSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   const load = async () => {
     setLoading(true);
     setError("");
     try {
       setExams(await listStudentExamFiles(student));
+      setCurrentTime(Date.now());
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Không tải được danh sách đề.");
     } finally {
@@ -39,6 +41,11 @@ export function StudentExamPortal({ student, onBack, onSelect }: StudentExamPort
     return () => { cancelled = true; };
   }, [student]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   return (
     <main className="min-h-screen bg-[#f4f7f8]">
       <header className="border-b border-slate-200 bg-white"><div className="mx-auto flex h-[72px] max-w-[1240px] items-center justify-between px-5 lg:px-8"><Brand compact /><button className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-900" onClick={onBack}><ArrowLeft className="h-4 w-4" /> Đăng xuất</button></div></header>
@@ -53,13 +60,18 @@ export function StudentExamPortal({ student, onBack, onSelect }: StudentExamPort
         <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {exams.map((exam) => {
             const open = exam.status === "open";
-            return <article key={exam.id} className={`panel overflow-hidden transition ${open ? "hover:-translate-y-0.5 hover:shadow-lg" : "opacity-75"}`}>
-              <div className={`h-1.5 ${open ? "bg-emerald-500" : "bg-slate-300"}`} />
+            const assigned = new Date(exam.assignedAt).getTime() <= currentTime;
+            const attemptsAvailable = exam.hasActiveAttempt || exam.attemptCount < exam.maxAttempts;
+            const available = open && assigned && attemptsAvailable;
+            const stateLabel = !open ? "Đã khóa" : !assigned ? "Chưa đến ngày giao" : !attemptsAvailable ? "Hết lượt làm" : exam.hasActiveAttempt ? "Đang làm dở" : "Đang mở";
+            return <article key={exam.id} className={`panel overflow-hidden transition ${available ? "hover:-translate-y-0.5 hover:shadow-lg" : "opacity-75"}`}>
+              <div className={`h-1.5 ${available ? "bg-emerald-500" : "bg-slate-300"}`} />
               <div className="p-5">
-                <div className="flex items-start justify-between gap-4"><div className={`grid h-11 w-11 place-items-center rounded-xl ${open ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{open ? <FileText className="h-5 w-5" /> : <FileLock2 className="h-5 w-5" />}</div><span className={`exam-file-status ${open ? "open" : "closed"}`}>{open ? <><UnlockKeyhole className="h-3 w-3" /> Đang mở</> : <><LockKeyhole className="h-3 w-3" /> Đã khóa</>}</span></div>
+                <div className="flex items-start justify-between gap-4"><div className={`grid h-11 w-11 place-items-center rounded-xl ${available ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{available ? <FileText className="h-5 w-5" /> : <FileLock2 className="h-5 w-5" />}</div><span className={`exam-file-status ${available ? "open" : "closed"}`}>{available ? <><UnlockKeyhole className="h-3 w-3" /> {stateLabel}</> : <><LockKeyhole className="h-3 w-3" /> {stateLabel}</>}</span></div>
                 <div className="mt-5 text-[10px] font-bold uppercase tracking-[.14em] text-teal-700">{exam.code}</div><h2 className="mt-2 min-h-12 text-lg font-bold leading-6 tracking-[-.025em] text-slate-950">{exam.title}</h2><p className="mt-2 text-xs text-slate-500">Giảng viên: {exam.teacherName}</p>
                 <div className="mt-5 grid grid-cols-2 gap-2"><div className="rounded-xl bg-slate-50 p-3"><Clock3 className="h-4 w-4 text-slate-400" /><div className="mt-2 text-xs font-bold">{exam.durationMinutes} phút</div></div><div className="rounded-xl bg-slate-50 p-3"><BookOpenCheck className="h-4 w-4 text-slate-400" /><div className="mt-2 text-xs font-bold">{exam.questionCount} câu</div></div></div>
-                <button disabled={!open} className={`mt-5 w-full ${open ? "primary-button" : "secondary-button"}`} onClick={() => open && setSelected(exam)}>{open ? <><KeyRound className="h-4 w-4" /> Nhập mật khẩu để mở</> : <><LockKeyhole className="h-4 w-4" /> Chưa thể truy cập</>}</button>
+                <div className="mt-3 space-y-2 rounded-xl border border-slate-100 p-3 text-[11px] text-slate-600"><div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-teal-700" /><span>Giao: <strong>{formatDateTime(exam.assignedAt)}</strong></span></div><div className="flex items-center gap-2"><RotateCcw className="h-4 w-4 text-teal-700" /><span>Đã dùng <strong>{exam.attemptCount}/{exam.maxAttempts}</strong> lượt{exam.hasActiveAttempt ? " · có bài đang làm dở" : ""}</span></div></div>
+                <button disabled={!available} className={`mt-5 w-full ${available ? "primary-button" : "secondary-button"}`} onClick={() => available && setSelected(exam)}>{available ? <><KeyRound className="h-4 w-4" /> {exam.hasActiveAttempt ? "Tiếp tục bài đang làm" : "Nhập mật khẩu để mở"}</> : <><LockKeyhole className="h-4 w-4" /> Chưa thể truy cập</>}</button>
               </div>
             </article>;
           })}
@@ -71,6 +83,10 @@ export function StudentExamPortal({ student, onBack, onSelect }: StudentExamPort
       {selected && <PasswordModal exam={selected} student={student} onClose={() => setSelected(null)} onUnlock={onSelect} />}
     </main>
   );
+}
+
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 }
 
 function PasswordModal({ exam, student, onClose, onUnlock }: { exam: StudentExamSummary; student: StudentCredential; onClose: () => void; onUnlock: (exam: ActiveExam) => void }) {

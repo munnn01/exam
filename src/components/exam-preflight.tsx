@@ -114,7 +114,7 @@ export function ExamPreflight({ student, exam, onBack, onStart }: ExamPreflightP
               <Info icon={Clock3} label="Thời lượng" value={`${exam.durationMinutes} phút`} />
               <Info icon={LockKeyhole} label="Mã kỳ thi" value={exam.code} />
               <Info icon={Video} label="Giám sát" value="Camera + toàn màn hình" />
-              <Info icon={Wifi} label="Kết nối" value={navigator.onLine ? "Đang trực tuyến" : "Ngoại tuyến"} />
+              <Info icon={Wifi} label={`Lượt làm ${exam.attemptNumber}/${exam.maxAttempts}`} value={navigator.onLine ? "Đáp án sẽ tự động lưu" : "Ngoại tuyến"} />
             </div>
             <div className="border-t border-slate-100 px-5 py-4">
               <div className="text-xs text-slate-500">Sinh viên</div>

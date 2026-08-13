@@ -28,6 +28,8 @@ export interface ExamInput {
   durationMinutes: number;
   questionCount: number;
   password: string;
+  assignedAt: string;
+  maxAttempts: number;
 }
 
 const BANKS_KEY = "examguard-question-banks-v2";
@@ -94,7 +96,13 @@ function seedLocal(teacher: TeacherIdentity) {
 }
 
 function normalizeLocalExam(exam: GeneratedExam): GeneratedExam {
-  return { ...exam, attemptCount: exam.attemptCount ?? 0, status: exam.status ?? "draft" };
+  return {
+    ...exam,
+    attemptCount: exam.attemptCount ?? 0,
+    assignedAt: exam.assignedAt ?? exam.createdAt ?? new Date().toISOString(),
+    maxAttempts: exam.maxAttempts ?? 1,
+    status: exam.status ?? "draft",
+  };
 }
 
 function seedDemoExamFiles() {
@@ -116,6 +124,8 @@ function seedDemoExamFiles() {
       status: "open",
       accessPassword: "246810",
       attemptCount: 0,
+      assignedAt: createdAt,
+      maxAttempts: 2,
       createdAt,
     },
     {
@@ -129,6 +139,8 @@ function seedDemoExamFiles() {
       status: "closed",
       accessPassword: "135790",
       attemptCount: 2,
+      assignedAt: createdAt,
+      maxAttempts: 1,
       createdAt,
     },
   ];
@@ -162,7 +174,8 @@ function mapExam(row: Record<string, unknown>, attemptCount = 0): GeneratedExam 
     id: String(row.id), teacherId: String(row.teacher_id), bankId: String(row.bank_id),
     code: String(row.code), title: String(row.title), durationMinutes: Number(row.duration_minutes),
     questionCount: Number(row.question_count), status: row.status as GeneratedExam["status"],
-    attemptCount, createdAt: String(row.created_at),
+    attemptCount, assignedAt: String(row.assigned_at ?? row.created_at),
+    maxAttempts: Number(row.max_attempts ?? 1), createdAt: String(row.created_at),
   };
 }
 
@@ -262,7 +275,8 @@ export async function createGeneratedExam(teacher: TeacherIdentity, input: ExamI
       id: crypto.randomUUID(), teacherId: teacher.id, bankId: input.bankId,
       code: input.code.trim().toUpperCase(), title: input.title.trim(), durationMinutes: input.durationMinutes,
       questionCount: input.questionCount, status: "draft", accessPassword: input.password,
-      attemptCount: 0, createdAt: new Date().toISOString(),
+      attemptCount: 0, assignedAt: input.assignedAt, maxAttempts: input.maxAttempts,
+      createdAt: new Date().toISOString(),
     };
     const snapshots = readLocal<Record<string, Question[]>>(SNAPSHOTS_KEY, {});
     snapshots[exam.id] = selected.map((question, index) => ({ id: index + 1, text: question.content, options: question.options, answer: question.correctAnswer }));
@@ -273,6 +287,7 @@ export async function createGeneratedExam(teacher: TeacherIdentity, input: ExamI
   const { data, error } = await getSupabaseBrowserClient().rpc("create_exam_file", {
     p_bank_id: input.bankId, p_code: input.code.trim().toUpperCase(), p_title: input.title.trim(),
     p_duration_minutes: input.durationMinutes, p_question_count: input.questionCount, p_password: input.password,
+    p_assigned_at: input.assignedAt, p_max_attempts: input.maxAttempts,
   });
   if (error) throw friendlyError(error.message);
   return mapExam(data as Record<string, unknown>);
@@ -309,6 +324,22 @@ export async function setExamStatus(teacher: TeacherIdentity, examId: string, st
   if (error) throw friendlyError(error.message);
 }
 
+export async function updateExamDeliverySettings(teacher: TeacherIdentity, examId: string, assignedAt: string, maxAttempts: number) {
+  if (!isSupabaseConfigured() || teacher.isDemo) {
+    const exams = readLocal<GeneratedExam[]>(EXAMS_KEY, []).map(normalizeLocalExam);
+    const exam = exams.find((item) => item.id === examId && (item.teacherId === teacher.id || teacher.id === "demo-teacher"));
+    if (!exam) throw new Error("Không tìm thấy file đề.");
+    writeLocal(EXAMS_KEY, exams.map((item) => item.id === examId ? { ...item, assignedAt, maxAttempts } : item));
+    return;
+  }
+  const { error } = await getSupabaseBrowserClient().rpc("update_exam_delivery_settings", {
+    p_exam_id: examId,
+    p_assigned_at: assignedAt,
+    p_max_attempts: maxAttempts,
+  });
+  if (error) throw friendlyError(error.message);
+}
+
 export async function deleteDraftExam(teacher: TeacherIdentity, examId: string) {
   if (!isSupabaseConfigured() || teacher.isDemo) {
     const exams = readLocal<GeneratedExam[]>(EXAMS_KEY, []).map(normalizeLocalExam);
@@ -329,7 +360,12 @@ export async function listStudentExamFiles(student: StudentCredential): Promise<
     seedDemoExamFiles();
     return readLocal<GeneratedExam[]>(EXAMS_KEY, []).map(normalizeLocalExam)
       .filter((exam) => exam.status === "open" || exam.status === "closed")
-      .map((exam) => ({ id: exam.id, code: exam.code, title: exam.title, teacherName: DEMO_TEACHER.name, durationMinutes: exam.durationMinutes, questionCount: exam.questionCount, status: exam.status as "open" | "closed" }));
+      .map((exam) => ({
+        id: exam.id, code: exam.code, title: exam.title, teacherName: DEMO_TEACHER.name,
+        durationMinutes: exam.durationMinutes, questionCount: exam.questionCount,
+        status: exam.status as "open" | "closed", assignedAt: exam.assignedAt,
+        maxAttempts: exam.maxAttempts, attemptCount: 0, hasActiveAttempt: false,
+      }));
   }
   const { data, error } = await getSupabaseBrowserClient().rpc("list_student_exam_files", {
     p_student_id: student.id,
@@ -339,6 +375,8 @@ export async function listStudentExamFiles(student: StudentCredential): Promise<
   return (data ?? []).map((row: Record<string, unknown>) => ({
     id: String(row.id), code: String(row.code), title: String(row.title), teacherName: String(row.teacher_name),
     durationMinutes: Number(row.duration_minutes), questionCount: Number(row.question_count), status: row.status as "open" | "closed",
+    assignedAt: String(row.assigned_at), maxAttempts: Number(row.max_attempts),
+    attemptCount: Number(row.attempt_count), hasActiveAttempt: Boolean(row.has_active_attempt),
   }));
 }
 
@@ -352,7 +390,23 @@ export async function unlockStudentExam(student: StudentCredential, examId: stri
     if (exam.accessPassword !== password) throw new Error("Mật khẩu file đề chưa đúng.");
     writeLocal(EXAMS_KEY, exams.map((item) => item.id === examId ? { ...item, attemptCount: item.attemptCount + 1 } : item));
     const questions = readLocal<Record<string, Question[]>>(SNAPSHOTS_KEY, {})[examId] ?? QUESTIONS;
-    return { id: exam.id, code: exam.code, title: exam.title, teacherName: DEMO_TEACHER.name, durationMinutes: exam.durationMinutes, questionCount: exam.questionCount, status: "open", questions };
+    const localAttemptId = `attempt-${exam.id}-${student.id}`;
+    const localAttemptsKey = `examguard-attempts-${exam.id}-${student.id}`;
+    const localAttempt = readLocal<{ attemptNumber: number; answers: Record<number, number>; startedAt: string } | null>(localAttemptsKey, null);
+    const attemptsUsed = localAttempt?.attemptNumber ?? 0;
+    if (new Date(exam.assignedAt).getTime() > Date.now()) throw new Error("Đề chưa đến ngày giao.");
+    if (!localAttempt && attemptsUsed >= exam.maxAttempts) throw new Error(`Bạn đã sử dụng hết ${exam.maxAttempts} lượt làm bài.`);
+    const startedAt = localAttempt?.startedAt ?? new Date().toISOString();
+    const attemptNumber = localAttempt?.attemptNumber ?? 1;
+    if (!localAttempt) writeLocal(localAttemptsKey, { attemptNumber, answers: {}, startedAt });
+    return {
+      id: exam.id, code: exam.code, title: exam.title, teacherName: DEMO_TEACHER.name,
+      durationMinutes: exam.durationMinutes, questionCount: exam.questionCount, status: "open",
+      assignedAt: exam.assignedAt, maxAttempts: exam.maxAttempts, attemptCount: attemptNumber,
+      hasActiveAttempt: true, questions, attemptId: localAttemptId, attemptNumber, startedAt,
+      remainingSeconds: Math.max(0, exam.durationMinutes * 60 - Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000)),
+      savedAnswers: localAttempt?.answers ?? {},
+    };
   }
   const { data, error } = await getSupabaseBrowserClient().rpc("unlock_exam_file", {
     p_exam_id: examId,
