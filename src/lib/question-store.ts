@@ -30,6 +30,7 @@ export interface ExamInput {
   password: string;
   assignedAt: string;
   maxAttempts: number;
+  showAnswers: boolean;
 }
 
 const BANKS_KEY = "examguard-question-banks-v2";
@@ -101,6 +102,7 @@ function normalizeLocalExam(exam: GeneratedExam): GeneratedExam {
     attemptCount: exam.attemptCount ?? 0,
     assignedAt: exam.assignedAt ?? exam.createdAt ?? new Date().toISOString(),
     maxAttempts: exam.maxAttempts ?? 1,
+    showAnswers: exam.showAnswers ?? false,
     status: exam.status ?? "draft",
   };
 }
@@ -126,6 +128,7 @@ function seedDemoExamFiles() {
       attemptCount: 0,
       assignedAt: createdAt,
       maxAttempts: 2,
+      showAnswers: true,
       createdAt,
     },
     {
@@ -141,6 +144,7 @@ function seedDemoExamFiles() {
       attemptCount: 2,
       assignedAt: createdAt,
       maxAttempts: 1,
+      showAnswers: false,
       createdAt,
     },
   ];
@@ -176,6 +180,7 @@ function mapExam(row: Record<string, unknown>, attemptCount = 0): GeneratedExam 
     questionCount: Number(row.question_count), status: row.status as GeneratedExam["status"],
     attemptCount, assignedAt: String(row.assigned_at ?? row.created_at),
     maxAttempts: Number(row.max_attempts ?? 1), createdAt: String(row.created_at),
+    showAnswers: Boolean(row.show_answers),
   };
 }
 
@@ -251,6 +256,15 @@ function shuffle<T>(values: T[]) {
   return next;
 }
 
+function shuffleQuestionOptions(question: Question): Question {
+  const order = shuffle([0, 1, 2, 3]);
+  return {
+    ...question,
+    options: order.map((index) => question.options[index]),
+    answer: typeof question.answer === "number" ? order.indexOf(question.answer) : undefined,
+  };
+}
+
 export async function getStorageStatus(teacher: TeacherIdentity): Promise<StorageStatus> {
   if (!isSupabaseConfigured() || teacher.isDemo) {
     const usedBytes = [BANKS_KEY, QUESTIONS_KEY, EXAMS_KEY, SNAPSHOTS_KEY]
@@ -276,6 +290,7 @@ export async function createGeneratedExam(teacher: TeacherIdentity, input: ExamI
       code: input.code.trim().toUpperCase(), title: input.title.trim(), durationMinutes: input.durationMinutes,
       questionCount: input.questionCount, status: "draft", accessPassword: input.password,
       attemptCount: 0, assignedAt: input.assignedAt, maxAttempts: input.maxAttempts,
+      showAnswers: input.showAnswers,
       createdAt: new Date().toISOString(),
     };
     const snapshots = readLocal<Record<string, Question[]>>(SNAPSHOTS_KEY, {});
@@ -288,6 +303,7 @@ export async function createGeneratedExam(teacher: TeacherIdentity, input: ExamI
     p_bank_id: input.bankId, p_code: input.code.trim().toUpperCase(), p_title: input.title.trim(),
     p_duration_minutes: input.durationMinutes, p_question_count: input.questionCount, p_password: input.password,
     p_assigned_at: input.assignedAt, p_max_attempts: input.maxAttempts,
+    p_show_answers: input.showAnswers,
   });
   if (error) throw friendlyError(error.message);
   return mapExam(data as Record<string, unknown>);
@@ -324,18 +340,19 @@ export async function setExamStatus(teacher: TeacherIdentity, examId: string, st
   if (error) throw friendlyError(error.message);
 }
 
-export async function updateExamDeliverySettings(teacher: TeacherIdentity, examId: string, assignedAt: string, maxAttempts: number) {
+export async function updateExamDeliverySettings(teacher: TeacherIdentity, examId: string, assignedAt: string, maxAttempts: number, showAnswers: boolean) {
   if (!isSupabaseConfigured() || teacher.isDemo) {
     const exams = readLocal<GeneratedExam[]>(EXAMS_KEY, []).map(normalizeLocalExam);
     const exam = exams.find((item) => item.id === examId && (item.teacherId === teacher.id || teacher.id === "demo-teacher"));
     if (!exam) throw new Error("Không tìm thấy file đề.");
-    writeLocal(EXAMS_KEY, exams.map((item) => item.id === examId ? { ...item, assignedAt, maxAttempts } : item));
+    writeLocal(EXAMS_KEY, exams.map((item) => item.id === examId ? { ...item, assignedAt, maxAttempts, showAnswers } : item));
     return;
   }
   const { error } = await getSupabaseBrowserClient().rpc("update_exam_delivery_settings", {
     p_exam_id: examId,
     p_assigned_at: assignedAt,
     p_max_attempts: maxAttempts,
+    p_show_answers: showAnswers,
   });
   if (error) throw friendlyError(error.message);
 }
@@ -360,12 +377,19 @@ export async function listStudentExamFiles(student: StudentCredential): Promise<
     seedDemoExamFiles();
     return readLocal<GeneratedExam[]>(EXAMS_KEY, []).map(normalizeLocalExam)
       .filter((exam) => exam.status === "open" || exam.status === "closed")
-      .map((exam) => ({
+      .map((exam) => {
+        const activeKey = `examguard-attempts-${exam.id}-${student.id}`;
+        const completedKey = `examguard-attempt-count-${exam.id}-${student.id}`;
+        const hasActiveAttempt = Boolean(window.localStorage.getItem(activeKey));
+        const completed = readLocal<number>(completedKey, 0);
+        return {
         id: exam.id, code: exam.code, title: exam.title, teacherName: DEMO_TEACHER.name,
         durationMinutes: exam.durationMinutes, questionCount: exam.questionCount,
         status: exam.status as "open" | "closed", assignedAt: exam.assignedAt,
-        maxAttempts: exam.maxAttempts, attemptCount: 0, hasActiveAttempt: false,
-      }));
+        maxAttempts: exam.maxAttempts, attemptCount: completed + (hasActiveAttempt ? 1 : 0), hasActiveAttempt,
+        showAnswers: exam.showAnswers,
+        };
+      });
   }
   const { data, error } = await getSupabaseBrowserClient().rpc("list_student_exam_files", {
     p_student_id: student.id,
@@ -377,6 +401,7 @@ export async function listStudentExamFiles(student: StudentCredential): Promise<
     durationMinutes: Number(row.duration_minutes), questionCount: Number(row.question_count), status: row.status as "open" | "closed",
     assignedAt: String(row.assigned_at), maxAttempts: Number(row.max_attempts),
     attemptCount: Number(row.attempt_count), hasActiveAttempt: Boolean(row.has_active_attempt),
+    showAnswers: Boolean(row.show_answers),
   }));
 }
 
@@ -388,22 +413,26 @@ export async function unlockStudentExam(student: StudentCredential, examId: stri
     if (!exam) throw new Error("Không tìm thấy file đề.");
     if (exam.status !== "open") throw new Error("File đề đang bị khóa.");
     if (exam.accessPassword !== password) throw new Error("Mật khẩu file đề chưa đúng.");
-    writeLocal(EXAMS_KEY, exams.map((item) => item.id === examId ? { ...item, attemptCount: item.attemptCount + 1 } : item));
-    const questions = readLocal<Record<string, Question[]>>(SNAPSHOTS_KEY, {})[examId] ?? QUESTIONS;
+    const sourceQuestions = readLocal<Record<string, Question[]>>(SNAPSHOTS_KEY, {})[examId] ?? QUESTIONS;
     const localAttemptId = `attempt-${exam.id}-${student.id}`;
     const localAttemptsKey = `examguard-attempts-${exam.id}-${student.id}`;
-    const localAttempt = readLocal<{ attemptNumber: number; answers: Record<number, number>; startedAt: string } | null>(localAttemptsKey, null);
-    const attemptsUsed = localAttempt?.attemptNumber ?? 0;
+    const completedAttemptsKey = `examguard-attempt-count-${exam.id}-${student.id}`;
+    const localAttempt = readLocal<{ attemptNumber: number; answers: Record<number, number>; startedAt: string; questions: Question[] } | null>(localAttemptsKey, null);
+    const attemptsUsed = readLocal<number>(completedAttemptsKey, 0);
     if (new Date(exam.assignedAt).getTime() > Date.now()) throw new Error("Đề chưa đến ngày giao.");
     if (!localAttempt && attemptsUsed >= exam.maxAttempts) throw new Error(`Bạn đã sử dụng hết ${exam.maxAttempts} lượt làm bài.`);
     const startedAt = localAttempt?.startedAt ?? new Date().toISOString();
-    const attemptNumber = localAttempt?.attemptNumber ?? 1;
-    if (!localAttempt) writeLocal(localAttemptsKey, { attemptNumber, answers: {}, startedAt });
+    const attemptNumber = localAttempt?.attemptNumber ?? attemptsUsed + 1;
+    const questions = localAttempt?.questions ?? sourceQuestions.map(shuffleQuestionOptions);
+    if (!localAttempt) {
+      writeLocal(localAttemptsKey, { attemptNumber, answers: {}, startedAt, questions });
+      writeLocal(EXAMS_KEY, exams.map((item) => item.id === examId ? { ...item, attemptCount: item.attemptCount + 1 } : item));
+    }
     return {
       id: exam.id, code: exam.code, title: exam.title, teacherName: DEMO_TEACHER.name,
       durationMinutes: exam.durationMinutes, questionCount: exam.questionCount, status: "open",
       assignedAt: exam.assignedAt, maxAttempts: exam.maxAttempts, attemptCount: attemptNumber,
-      hasActiveAttempt: true, questions, attemptId: localAttemptId, attemptNumber, startedAt,
+      hasActiveAttempt: true, showAnswers: exam.showAnswers, questions, attemptId: localAttemptId, attemptNumber, startedAt,
       remainingSeconds: Math.max(0, exam.durationMinutes * 60 - Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000)),
       savedAnswers: localAttempt?.answers ?? {},
     };

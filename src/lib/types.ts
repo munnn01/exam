@@ -89,6 +89,7 @@ export interface GeneratedExam {
   attemptCount: number;
   assignedAt: string;
   maxAttempts: number;
+  showAnswers: boolean;
   createdAt: string;
 }
 
@@ -104,6 +105,7 @@ export interface StudentExamSummary {
   maxAttempts: number;
   attemptCount: number;
   hasActiveAttempt: boolean;
+  showAnswers: boolean;
 }
 
 export interface ActiveExam extends StudentExamSummary {
@@ -113,6 +115,14 @@ export interface ActiveExam extends StudentExamSummary {
   startedAt: string;
   remainingSeconds: number;
   savedAnswers: Record<number, number>;
+}
+
+export interface ExamSubmissionResult {
+  score: number | null;
+  total: number;
+  answers: Record<number, number>;
+  showAnswers: boolean;
+  correctAnswers: Record<number, number> | null;
 }
 
 export interface ExamAttemptSummary {

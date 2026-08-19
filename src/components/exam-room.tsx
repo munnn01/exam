@@ -17,14 +17,14 @@ import {
 import { Brand } from "./brand";
 import { saveExamAnswers, submitExamAttempt } from "@/lib/attempt-store";
 import { recordProctorEvent } from "@/lib/proctor-event-store";
-import type { ActiveExam, ProctorEvent, StudentCredential } from "@/lib/types";
+import type { ActiveExam, ExamSubmissionResult, ProctorEvent, StudentCredential } from "@/lib/types";
 import { useProctoring } from "@/hooks/use-proctoring";
 
 interface ExamRoomProps {
   student: StudentCredential;
   exam: ActiveExam;
   screenStream: MediaStream;
-  onFinish: (result: { score: number | null; total: number; answers: Record<number, number> }) => void;
+  onFinish: (result: ExamSubmissionResult) => void;
 }
 
 export function ExamRoom({ student, exam, screenStream, onFinish }: ExamRoomProps) {
@@ -134,7 +134,13 @@ export function ExamRoom({ student, exam, screenStream, onFinish }: ExamRoomProp
       setSaveStatus("saved");
       screenStreamRef.current?.getTracks().forEach((track) => track.stop());
       if (document.fullscreenElement) await document.exitFullscreen().catch(() => undefined);
-      onFinish({ score: null, total: result.total, answers });
+      onFinish({
+        score: result.score,
+        total: result.total,
+        answers,
+        showAnswers: result.showAnswers,
+        correctAnswers: result.correctAnswers,
+      });
     } catch (cause) {
       finishingRef.current = false;
       setFinishing(false);

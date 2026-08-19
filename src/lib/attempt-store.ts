@@ -72,8 +72,17 @@ export async function submitExamAttempt(student: StudentCredential, exam: Active
     const score = exam.questions.every((question) => typeof question.answer === "number")
       ? exam.questions.reduce((sum, question) => sum + (current?.answers[question.id] === question.answer ? 1 : 0), 0)
       : null;
+    window.localStorage.setItem(`examguard-attempt-count-${exam.id}-${student.id}`, String(exam.attemptNumber));
     window.localStorage.removeItem(localAttemptKey(exam.id, student.id));
-    return { score, total: exam.questions.length, submittedAt: new Date().toISOString(), attemptNumber: exam.attemptNumber };
+    const correctAnswers = exam.showAnswers ? Object.fromEntries(exam.questions.map((question) => [question.id, question.answer ?? 0])) : null;
+    return {
+      score: exam.showAnswers ? score : null,
+      total: exam.questions.length,
+      submittedAt: new Date().toISOString(),
+      attemptNumber: exam.attemptNumber,
+      showAnswers: exam.showAnswers,
+      correctAnswers,
+    };
   }
 
   const { data, error } = await getSupabaseBrowserClient().rpc("submit_exam_attempt", {
@@ -88,6 +97,10 @@ export async function submitExamAttempt(student: StudentCredential, exam: Active
     total: Number(result.total),
     submittedAt: String(result.submittedAt),
     attemptNumber: Number(result.attemptNumber),
+    showAnswers: Boolean(result.showAnswers),
+    correctAnswers: result.correctAnswers && typeof result.correctAnswers === "object"
+      ? Object.fromEntries(Object.entries(result.correctAnswers as Record<string, unknown>).map(([key, value]) => [Number(key), Number(value)]))
+      : null,
   };
 }
 

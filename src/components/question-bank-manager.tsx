@@ -161,11 +161,17 @@ function ImportModal({ bank, onClose, onImport }: { bank: QuestionBank; onClose:
         if (firstError) { setError(`CSV lỗi ở dòng ${(firstError.row ?? 0) + 2}: ${firstError.message}`); return; }
         try {
           const parsed = data.map((row, index) => {
-            const answer = String(row.correct_answer || "").trim().toUpperCase();
+            const normalizedRow = row as Record<string, string>;
+            const content = normalizedRow.content ?? normalizedRow.cau_hoi;
+            const optionA = normalizedRow.option_a ?? normalizedRow.phuong_an_a;
+            const optionB = normalizedRow.option_b ?? normalizedRow.phuong_an_b;
+            const optionC = normalizedRow.option_c ?? normalizedRow.phuong_an_c;
+            const optionD = normalizedRow.option_d ?? normalizedRow.phuong_an_d;
+            const answer = String(normalizedRow.correct_answer ?? normalizedRow.dap_an_dung ?? "").trim().toUpperCase();
             const correctAnswer = /^[1-4]$/.test(answer) ? Number(answer) - 1 : ["A", "B", "C", "D"].indexOf(answer);
-            const options = [row.option_a, row.option_b, row.option_c, row.option_d].map((value) => String(value || "").trim());
-            if (!row.content?.trim() || options.some((option) => !option) || correctAnswer < 0) throw new Error(`Dòng ${index + 2} thiếu câu hỏi, phương án hoặc đáp án đúng (A–D).`);
-            return { content: row.content.trim(), options, correctAnswer };
+            const options = [optionA, optionB, optionC, optionD].map((value) => String(value || "").trim());
+            if (!content?.trim() || options.some((option) => !option) || correctAnswer < 0) throw new Error(`Dòng ${index + 2} thiếu câu hỏi, phương án hoặc đáp án đúng (A–D).`);
+            return { content: content.trim(), options, correctAnswer };
           });
           if (!parsed.length) throw new Error("File CSV chưa có câu hỏi nào.");
           setImportingCount(parsed.length); setBusy(true);
@@ -177,7 +183,7 @@ function ImportModal({ bank, onClose, onImport }: { bank: QuestionBank; onClose:
       error: (cause) => setError(`Không thể đọc file CSV: ${cause.message}`),
     });
   };
-  return <ModalShell eyebrow="Thêm hàng loạt" title={`Nhập CSV vào ${bank.name}`} onClose={onClose}><div className="mt-6 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-7 text-center"><FileUp className="mx-auto h-8 w-8 text-teal-600" /><div className="mt-3 text-sm font-bold">{fileName || "Chọn file CSV UTF-8"}</div><div className="mt-1 text-xs leading-5 text-slate-500">Mỗi dòng gồm câu hỏi, 4 phương án và đáp án đúng. Chọn file xong, hệ thống sẽ tự động nhập ngay.</div><input ref={inputRef} className="hidden" type="file" accept=".csv,text/csv" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) parseFile(file); }} /><div className="mt-5 flex flex-wrap justify-center gap-2"><a className="secondary-button" href="/mau-cau-hoi.csv" download><Download className="h-4 w-4" /> Tải CSV mẫu</a><button className="primary-button" disabled={busy} onClick={() => inputRef.current?.click()}><FileUp className="h-4 w-4" /> {busy ? `Đang nhập ${importingCount} câu...` : "Chọn file CSV"}</button></div></div>{error && <ErrorBox text={error} />}<div className="mt-6 flex justify-end"><button className="secondary-button" disabled={busy} onClick={onClose}>Đóng</button></div></ModalShell>;
+  return <ModalShell eyebrow="Thêm hàng loạt" title={`Nhập CSV vào ${bank.name}`} onClose={onClose}><div className="mt-6 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-7 text-center"><FileUp className="mx-auto h-8 w-8 text-teal-600" /><div className="mt-3 text-sm font-bold">{fileName || "Chọn file CSV UTF-8"}</div><div className="mt-1 text-xs leading-5 text-slate-500">File mẫu dùng dấu chấm phẩy để khi mở bằng Excel, mỗi mục nằm đúng một cột riêng.</div><div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white text-left"><div className="grid min-w-[590px] grid-cols-[1.6fr_repeat(5,1fr)] divide-x divide-slate-100 text-[10px]"><CsvColumn label="Câu hỏi" /><CsvColumn label="Phương án A" /><CsvColumn label="Phương án B" /><CsvColumn label="Phương án C" /><CsvColumn label="Phương án D" /><CsvColumn label="Đáp án đúng" /></div></div><input ref={inputRef} className="hidden" type="file" accept=".csv,text/csv" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) parseFile(file); }} /><div className="mt-5 flex flex-wrap justify-center gap-2"><a className="secondary-button" href="/mau-cau-hoi.csv" download><Download className="h-4 w-4" /> Tải CSV mẫu 6 cột</a><button className="primary-button" disabled={busy} onClick={() => inputRef.current?.click()}><FileUp className="h-4 w-4" /> {busy ? `Đang nhập ${importingCount} câu...` : "Chọn file CSV"}</button></div></div>{error && <ErrorBox text={error} />}<div className="mt-6 flex justify-end"><button className="secondary-button" disabled={busy} onClick={onClose}>Đóng</button></div></ModalShell>;
 }
 
 function ExamModal({ bank, availableCount, onClose, onCreate }: { bank: QuestionBank; availableCount: number; onClose: () => void; onCreate: (input: ExamInput) => Promise<void> }) {
@@ -189,6 +195,7 @@ function ExamModal({ bank, availableCount, onClose, onCreate }: { bank: Question
     password: String(Math.floor(100000 + Math.random() * 900000)),
     assignedAt: toDateTimeInput(new Date()),
     maxAttempts: 1,
+    showAnswers: false,
   }));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -205,7 +212,7 @@ function ExamModal({ bank, availableCount, onClose, onCreate }: { bank: Question
         setBusy(false);
       }
     }}>
-      <div className="mt-6 rounded-xl bg-teal-50 p-4 text-xs leading-5 text-teal-900">Ngân hàng có <strong>{availableCount} câu</strong>. Hệ thống sẽ chọn ngẫu nhiên và lưu bản chụp câu hỏi để việc sửa ngân hàng sau này không làm thay đổi đề.</div>
+      <div className="mt-6 rounded-xl bg-teal-50 p-4 text-xs leading-5 text-teal-900">Ngân hàng có <strong>{availableCount} câu</strong>. Mỗi lượt làm nhận thứ tự phương án A–D được tráo riêng và giữ nguyên khi tải lại.</div>
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <FormField label="Mã đề"><input className="form-input uppercase" required value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value })} /></FormField>
         <FormField label="Mật khẩu gửi sinh viên"><input className="form-input font-mono tracking-[.12em]" required minLength={4} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></FormField>
@@ -214,6 +221,7 @@ function ExamModal({ bank, availableCount, onClose, onCreate }: { bank: Question
         <FormField label="Số câu"><input className="form-input" type="number" min={1} max={availableCount} value={form.questionCount} onChange={(event) => setForm({ ...form, questionCount: Number(event.target.value) })} /></FormField>
         <FormField label="Ngày và giờ giao"><input className="form-input" required type="datetime-local" value={form.assignedAt} onChange={(event) => setForm({ ...form, assignedAt: event.target.value })} /></FormField>
         <FormField label="Số lượt làm tối đa / sinh viên"><input className="form-input" required type="number" min={1} max={20} value={form.maxAttempts} onChange={(event) => setForm({ ...form, maxAttempts: Number(event.target.value) })} /></FormField>
+        <div className="sm:col-span-2"><FormField label="Sau khi sinh viên nộp bài"><div className="grid gap-3 sm:grid-cols-2"><AnswerModeOption active={!form.showAnswers} title="Không thấy đáp án" copy="Chỉ báo đã nộp, không hiện điểm và đáp án đúng." onClick={() => setForm({ ...form, showAnswers: false })} /><AnswerModeOption active={form.showAnswers} title="Thấy đáp án" copy="Hiện điểm, câu đúng/sai và đáp án đúng sau khi nộp." onClick={() => setForm({ ...form, showAnswers: true })} /></div></FormField></div>
       </div>
       <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">Sinh viên chỉ bắt đầu được từ ngày giao và không thể vượt quá số lượt đã đặt. Hãy lưu mật khẩu vì hệ thống không thể đọc lại mật khẩu đã mã hóa.</div>
       {error && <ErrorBox text={error} />}
@@ -225,6 +233,12 @@ function ExamModal({ bank, availableCount, onClose, onCreate }: { bank: Question
 function toDateTimeInput(date: Date) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 16);
+}
+
+function CsvColumn({ label }: { label: string }) { return <div className="px-2 py-3 font-bold text-slate-600">{label}</div>; }
+
+function AnswerModeOption({ active, title, copy, onClick }: { active: boolean; title: string; copy: string; onClick: () => void }) {
+  return <button type="button" className={`rounded-xl border p-4 text-left transition ${active ? "border-teal-400 bg-teal-50 ring-2 ring-teal-100" : "border-slate-200 bg-white hover:bg-slate-50"}`} onClick={onClick}><div className={`text-xs font-bold ${active ? "text-teal-800" : "text-slate-800"}`}>{title}</div><div className="mt-1 text-[10px] leading-4 text-slate-500">{copy}</div></button>;
 }
 
 function FormField({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block"><span className="form-label">{label}</span>{children}</label>; }

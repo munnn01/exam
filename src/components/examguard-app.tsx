@@ -8,7 +8,7 @@ import { LoginView } from "./login-view";
 import { StudentExamPortal } from "./student-exam-portal";
 import { TeacherDashboard } from "./teacher-dashboard";
 import { getCurrentTeacher, signOutTeacher } from "@/lib/teacher-auth";
-import type { ActiveExam, AppView, StudentCredential, TeacherIdentity } from "@/lib/types";
+import type { ActiveExam, AppView, ExamSubmissionResult, StudentCredential, TeacherIdentity } from "@/lib/types";
 
 export function ExamGuardApp() {
   const [view, setView] = useState<AppView>("login");
@@ -16,7 +16,7 @@ export function ExamGuardApp() {
   const [activeExam, setActiveExam] = useState<ActiveExam | null>(null);
   const [teacher, setTeacher] = useState<TeacherIdentity | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
-  const [result, setResult] = useState<{ score: number | null; total: number }>({ score: null, total: 0 });
+  const [result, setResult] = useState<ExamSubmissionResult>({ score: null, total: 0, answers: {}, showAnswers: false, correctAnswers: null });
 
   useEffect(() => {
     void getCurrentTeacher().then((current) => {
