@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, BookOpenCheck, CalendarDays, Clock3, Eye, EyeOff, FileLock2, FileText, KeyRound, LockKeyhole, RefreshCw, RotateCcw, ShieldCheck, UnlockKeyhole, X } from "lucide-react";
+import { ArrowLeft, BookOpenCheck, CalendarDays, Clock3, Eye, EyeOff, FileLock2, FileText, GraduationCap, KeyRound, Languages, LockKeyhole, RefreshCw, RotateCcw, ShieldCheck, UnlockKeyhole, X } from "lucide-react";
 import { Brand } from "./brand";
+import { IeltsPracticeCenter } from "./ielts-practice-center";
 import { listStudentExamFiles, unlockStudentExam } from "@/lib/question-store";
 import type { ActiveExam, StudentCredential, StudentExamSummary } from "@/lib/types";
 
@@ -13,6 +14,7 @@ interface StudentExamPortalProps {
 }
 
 export function StudentExamPortal({ student, onBack, onSelect }: StudentExamPortalProps) {
+  const [portalMode, setPortalMode] = useState<"exams" | "ielts">("exams");
   const [exams, setExams] = useState<StudentExamSummary[]>([]);
   const [selected, setSelected] = useState<StudentExamSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -48,7 +50,8 @@ export function StudentExamPortal({ student, onBack, onSelect }: StudentExamPort
 
   return (
     <main className="min-h-screen bg-[#f4f7f8]">
-      <header className="border-b border-slate-200 bg-white"><div className="mx-auto flex h-[72px] max-w-[1240px] items-center justify-between px-5 lg:px-8"><Brand compact /><button className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-900" onClick={onBack}><ArrowLeft className="h-4 w-4" /> Đăng xuất</button></div></header>
+      <header className="border-b border-slate-200 bg-white"><div className="mx-auto flex min-h-[72px] max-w-[1240px] flex-wrap items-center justify-between gap-3 px-5 py-3 lg:px-8"><Brand compact /><div className="flex items-center gap-2"><div className="flex rounded-xl bg-slate-100 p-1"><button className={`role-tab h-9 px-3 ${portalMode === "exams" ? "active" : ""}`} onClick={() => setPortalMode("exams")}><GraduationCap className="h-4 w-4" /> Đề thi</button><button className={`role-tab h-9 px-3 ${portalMode === "ielts" ? "active" : ""}`} onClick={() => setPortalMode("ielts")}><Languages className="h-4 w-4" /> Luyện IELTS</button></div><button className="ml-1 flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-900" onClick={onBack}><ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">Đăng xuất</span></button></div></div></header>
+      {portalMode === "ielts" ? <IeltsPracticeCenter student={student} /> : <>
       <div className="mx-auto max-w-[1180px] px-5 py-9 lg:px-8 lg:py-12">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div><div className="eyebrow"><ShieldCheck className="h-4 w-4" /> Cổng dự thi sinh viên</div><h1 className="mt-5 text-4xl font-bold tracking-[-.055em] text-slate-950">Danh sách file đề</h1><p className="mt-3 text-sm leading-6 text-slate-500">Xin chào <strong className="text-slate-800">{student.name}</strong> · {student.id}. Chọn đề đang mở và nhập mật khẩu do giảng viên cấp.</p></div>
@@ -81,6 +84,7 @@ export function StudentExamPortal({ student, onBack, onSelect }: StudentExamPort
       </div>
 
       {selected && <PasswordModal exam={selected} student={student} onClose={() => setSelected(null)} onUnlock={onSelect} />}
+      </>}
     </main>
   );
 }

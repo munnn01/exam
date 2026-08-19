@@ -18,6 +18,8 @@ Website thi trực tuyến nhiều giảng viên, có ngân hàng câu hỏi ri�
 - Giảng viên đặt ngày/giờ giao và số lượt làm tối đa riêng cho từng file đề.
 - Mỗi đề chọn chế độ sinh viên được xem hoặc không được xem điểm và đáp án đúng sau khi nộp.
 - Phương án A–D được tráo và lưu riêng cho từng lượt làm; tải lại không làm đổi thứ tự.
+- Cổng sinh viên có khu luyện IELTS Academic 4 kỹ năng: Listening phát giọng đọc và chấm đáp án, Reading có bài đọc và đồng hồ, Writing Task 1/2 tự lưu và đếm từ, Speaking ghi âm/nghe lại ngay trên thiết bị.
+- Tiến độ IELTS được lưu theo tài khoản sinh viên; giảng viên có tab riêng để xem số bài hoàn thành và điểm Listening/Reading tốt nhất.
 - File đề có vòng đời nháp → mở → khóa → lưu trữ; chỉ nháp chưa có lượt làm được xóa.
 - Hiển thị dung lượng và tự chặn tạo file đề khi database gần đầy.
 - Phòng thi 45 phút với 10 câu hỏi, lưu đáp án, đánh dấu câu và nộp bài.

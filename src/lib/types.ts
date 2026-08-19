@@ -175,3 +175,26 @@ export interface MonitorStatus {
   gaze: "center" | "away" | "unknown";
   detail: string;
 }
+
+export type IeltsSkill = "listening" | "reading" | "writing" | "speaking";
+
+export interface IeltsProgressRecord {
+  skill: IeltsSkill;
+  moduleId: string;
+  payload: Record<string, unknown>;
+  score: number | null;
+  completed: boolean;
+  updatedAt: string;
+}
+
+export interface TeacherIeltsProgressSummary {
+  studentId: string;
+  studentName: string;
+  listeningCompleted: number;
+  readingCompleted: number;
+  writingCompleted: number;
+  speakingCompleted: number;
+  listeningBestScore: number | null;
+  readingBestScore: number | null;
+  lastPracticedAt: string | null;
+}

@@ -13,6 +13,7 @@ import {
   FileCheck2,
   LayoutDashboard,
   KeyRound,
+  Languages,
   LogOut,
   Menu,
   MonitorUp,
@@ -30,6 +31,7 @@ import {
 import { Brand } from "./brand";
 import { AttemptHistoryManager } from "./attempt-history-manager";
 import { ExamFileManager } from "./exam-file-manager";
+import { IeltsProgressManager } from "./ielts-progress-manager";
 import { QuestionBankManager } from "./question-bank-manager";
 import { VIOLATION_LABELS } from "@/lib/demo-data";
 import { formatTime, makePassword } from "@/lib/store";
@@ -47,6 +49,7 @@ const navItems = [
   { id: "questions", label: "Ngân hàng câu hỏi", icon: BookOpenCheck },
   { id: "exam-files", label: "File đề thi", icon: Files },
   { id: "students", label: "Danh sách sinh viên", icon: Users },
+  { id: "ielts-progress", label: "Tiến độ IELTS", icon: Languages },
   { id: "attempts", label: "Bài làm & đáp án", icon: FileCheck2 },
   { id: "events", label: "Nhật ký giám sát", icon: ShieldAlert },
   { id: "settings", label: "Cấu hình kỳ thi", icon: Settings },
@@ -208,6 +211,8 @@ export function TeacherDashboard({ teacher, onLogout }: TeacherDashboardProps) {
               </div>
             </section>
           )}
+
+          {section === "ielts-progress" && <IeltsProgressManager teacher={teacher} />}
 
           {section === "attempts" && <AttemptHistoryManager teacher={teacher} />}
 
